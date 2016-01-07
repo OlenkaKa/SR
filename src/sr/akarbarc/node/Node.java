@@ -4,12 +4,14 @@ import java.io.IOException;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Observable;
+import java.util.Observer;
 import java.util.concurrent.TimeoutException;
 
 /**
  * Created by ola on 05.01.16.
  */
-public class Node {
+public class Node implements Observer {
     // ADDRESSES
     private String trackerHost;
     private int trackerPort;
@@ -48,7 +50,10 @@ public class Node {
     }
 
     public void stop() {
-        // TODO
+        server.close();
+        ping.close();
+        tracker.close();
+        nodes.forEach(Connection::close);
     }
 
     public void getResource() throws TimeoutException {
@@ -59,35 +64,54 @@ public class Node {
         // TODO
     }
 
+    @Override
+    public void update(Observable o, Object arg) {
+        if(o == ping) {
+            System.out.println("Ping problem.");
+        } else if(o == server) {
+            System.out.println("Server problem.");
+        } else if(o == tracker) {
+            System.out.println("Connection with tracker problem.");
+        } else if(nodes.contains(o)) {
+            System.out.println("Connection with node problem.");
+        }
+    }
 
     // CALLBACKS AND HANDLERS
 
-    private void nodeCallback() {
-        // TODO
+    @SuppressWarnings("unused")
+    void nodeCallback() {
+        System.out.println("Node received message!");
     }
 
-    private void trackerCallback() {
-        // TODO
+    @SuppressWarnings("unused")
+    void trackerCallback() {
+        System.out.println("Tracker received message!");
     }
 
-    private void handleNewConnection(Socket socket) throws NoSuchMethodException {
+    @SuppressWarnings("unused")
+    void handleNewConnection(Socket socket) throws NoSuchMethodException {
         Class params[] = {};
-        Connection node = new Connection(socket, Node.class.getDeclaredMethod("nodeCallback", params));
+        Connection node = new Connection(socket, Node.class.getDeclaredMethod("nodeCallback", params), this);
+        node.addObserver(this);
         nodes.add(node);
+        System.out.println("new node");
     }
 
     // OTHERS
 
     private void connectTracker() throws IOException, NoSuchMethodException {
         Class params[] = {};
-        tracker = new Connection(trackerHost, trackerPort, Node.class.getDeclaredMethod("trackerCallback", params));
+        tracker = new Connection(new Socket(trackerHost, trackerPort),
+                Node.class.getDeclaredMethod("trackerCallback", params), this);
+        tracker.addObserver(this);
         ping = new Ping(tracker);
-        ping.start();
+        ping.addObserver(this);
     }
 
     private void startServer() throws IOException, NoSuchMethodException {
         Class params[] = {Socket.class};
-        server = new Server(serverPort, Node.class.getDeclaredMethod("handleNewConnection", params));
-        server.start();
+        server = new Server(serverPort, Node.class.getDeclaredMethod("handleNewConnection", params), this);
+        server.addObserver(this);
     }
 }
