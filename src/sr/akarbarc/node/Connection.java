@@ -1,5 +1,7 @@
 package sr.akarbarc.node;
 
+import sr.akarbarc.msgs.Message;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -30,8 +32,7 @@ public class Connection extends Observable {
                     String input;
                     while (!isInterrupted()) {
                         if ((input = in.readLine()) != null) {
-                            callback.invoke(callbackObj);
-                            System.out.println(input);
+                            callback.invoke(callbackObj, new Message(input));
                         }
                     }
                 } catch (Exception e) {
@@ -43,10 +44,10 @@ public class Connection extends Observable {
         receiver.start();
     }
 
-    public boolean write() {
+    public boolean write(Message msg) {
         try {
             PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
-            String outputLine = "Connection: write method called";
+            String outputLine = msg.toString();
             out.println(outputLine);
         } catch (IOException e) {
             return false;

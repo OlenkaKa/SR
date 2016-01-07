@@ -17,8 +17,11 @@ public class Main {
 
         Node node = new Node(trackerHost, trackerPort, nodePort);
         try {
-            if(!node.start())
+            if(!node.start()) {
+                System.out.println("Failed to start node.");
+                node.stop();
                 return;
+            }
 
             Scanner reader = new Scanner(System.in);
             while (true) {

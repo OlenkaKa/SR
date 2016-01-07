@@ -1,5 +1,7 @@
 package sr.akarbarc.node;
 
+import sr.akarbarc.msgs.Message;
+
 import java.io.IOException;
 import java.net.Socket;
 import java.util.ArrayList;
@@ -39,7 +41,6 @@ public class Node implements Observer {
             connectTracker();
             startServer();
         } catch (IOException e) {
-            System.out.println("Failed to start node.");
             return false;
         }
         catch (NoSuchMethodException e) {
@@ -50,9 +51,12 @@ public class Node implements Observer {
     }
 
     public void stop() {
-        server.close();
-        ping.close();
-        tracker.close();
+        if(server != null)
+            server.close();
+        if(ping != null)
+            ping.close();
+        if(tracker != null)
+            tracker.close();
         nodes.forEach(Connection::close);
     }
 
@@ -67,31 +71,31 @@ public class Node implements Observer {
     @Override
     public void update(Observable o, Object arg) {
         if(o == ping) {
-            System.out.println("Ping problem.");
+            System.out.println("Ping stop.");
         } else if(o == server) {
-            System.out.println("Server problem.");
+            System.out.println("Server stop.");
         } else if(o == tracker) {
-            System.out.println("Connection with tracker problem.");
+            System.out.println("Connection with tracker stop.");
         } else if(nodes.contains(o)) {
-            System.out.println("Connection with node problem.");
+            System.out.println("Connection with node stop.");
         }
     }
 
     // CALLBACKS AND HANDLERS
 
     @SuppressWarnings("unused")
-    void nodeCallback() {
-        System.out.println("Node received message!");
+    void nodeCallback(Message msg) {
+        System.out.println("Node callback: " + msg.toString());
     }
 
     @SuppressWarnings("unused")
-    void trackerCallback() {
-        System.out.println("Tracker received message!");
+    void trackerCallback(Message msg) {
+        System.out.println("Tracker callback: " + msg.toString());
     }
 
     @SuppressWarnings("unused")
     void handleNewConnection(Socket socket) throws NoSuchMethodException {
-        Class params[] = {};
+        Class params[] = {Message.class};
         Connection node = new Connection(socket, Node.class.getDeclaredMethod("nodeCallback", params), this);
         node.addObserver(this);
         nodes.add(node);
@@ -101,7 +105,7 @@ public class Node implements Observer {
     // OTHERS
 
     private void connectTracker() throws IOException, NoSuchMethodException {
-        Class params[] = {};
+        Class params[] = {Message.class};
         tracker = new Connection(new Socket(trackerHost, trackerPort),
                 Node.class.getDeclaredMethod("trackerCallback", params), this);
         tracker.addObserver(this);

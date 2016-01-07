@@ -1,5 +1,8 @@
 package sr.akarbarc.node;
 
+import sr.akarbarc.msgs.Message;
+import sr.akarbarc.msgs.Type;
+
 import java.util.Observable;
 
 /**
@@ -15,9 +18,10 @@ public class Ping extends Observable {
         sender = new Thread() {
             @Override
             public void run() {
+                Message msg = new Message(Type.TRACKER_PING);
                 while(!isInterrupted()) {
                     try {
-                        tracker.write();
+                        tracker.write(msg);
                         Thread.sleep(INTERVAL);
                     } catch (InterruptedException e) {
                         interrupt();
