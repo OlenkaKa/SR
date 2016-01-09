@@ -1,5 +1,6 @@
 package sr.akarbarc.msgs;
 
+import org.json.JSONException;
 import org.json.JSONObject;
 
 /**
@@ -13,8 +14,12 @@ public class Message {
     }
 
     public Message(String data) {
-        JSONObject json = new JSONObject(data);
-        type = Type.getType(json.getInt("type"));
+        try {
+            JSONObject json = new JSONObject(data);
+            type = Type.getType(json.getInt("type"));
+        } catch (JSONException e) {
+            type = Type.INVALID;
+        }
     }
 
     public Type getType() {

@@ -12,31 +12,41 @@ public class Ping extends Observable {
     private final int INTERVAL = 5000;
     private Connection tracker;
     private Thread sender;
+    private boolean running = false;
 
     public Ping(Connection tracker) {
         this.tracker = tracker;
+    }
+
+    public void start() {
         sender = new Thread() {
             @Override
             public void run() {
-                Message msg = new Message(Type.TRACKER_PING);
-                while(!isInterrupted()) {
-                    try {
+                Message msg = new Message(Type.PING);
+                try {
+                    while(!isInterrupted()) {
                         tracker.write(msg);
                         Thread.sleep(INTERVAL);
-                    } catch (InterruptedException e) {
-                        interrupt();
-                        return;
-                    } catch (Exception e) {
-                        setChanged();
-                        notifyObservers();
                     }
+                } catch (Exception e) {
+                    Ping.this.stop();
                 }
             }
         };
         sender.start();
+        setState(true);
     }
 
-    public void close() {
+    public void stop() {
+        setState(false);
         sender.interrupt();
+    }
+
+    private void setState(boolean newRunning) {
+        if(running != newRunning) {
+            running = newRunning;
+            setChanged();
+            notifyObservers(running);
+        }
     }
 }

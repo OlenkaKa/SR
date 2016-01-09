@@ -10,38 +10,54 @@ import java.util.Observable;
  * Created by ola on 06.01.16.
  */
 public class Server extends Observable {
-    private Method handler;
-    private Object handlerObj;
+    private int port;
+    private Method callback;
+    private Object callbackObj;
+
     private ServerSocket serverSocket;
     private Thread listener;
+    private boolean running = false;
 
-    public Server(int port, Method handler, Object obj) throws IOException {
-        this.handler = handler;
-        this.handlerObj = obj;
+    public Server(int port, Method callback, Object callbackObj) {
+        this.port = port;
+        this.callback = callback;
+        this.callbackObj = callbackObj;
+    }
+
+    public void start() throws IOException {
         serverSocket = new ServerSocket(port);
         listener = new Thread() {
             @Override
             public void run() {
-                while(!isInterrupted()) {
-                    try {
+                try {
+                    while (!isInterrupted()) {
                         Socket socket = serverSocket.accept();
-                        handler.invoke(handlerObj, socket);
-                    } catch (Exception e) {
-                        setChanged();
-                        notifyObservers();
+                        callback.invoke(callbackObj, socket);
                     }
+                } catch (Exception e) {
+                    Server.this.stop();
                 }
             }
         };
         listener.start();
+        setState(true);
     }
 
-    public void close() {
+    public void stop() {
         try {
+            setState(false);
             listener.interrupt();
             serverSocket.close();
         } catch (IOException e) {
             e.printStackTrace();
+        }
+    }
+
+    private void setState(boolean newRunning) {
+        if(running != newRunning) {
+            running = newRunning;
+            setChanged();
+            notifyObservers(running);
         }
     }
 }

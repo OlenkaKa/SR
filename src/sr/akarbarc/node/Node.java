@@ -1,23 +1,24 @@
 package sr.akarbarc.node;
 
-import sr.akarbarc.msgs.Message;
+import sr.akarbarc.msgs.*;
 
 import java.io.IOException;
 import java.net.Socket;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Observable;
-import java.util.Observer;
+import java.net.UnknownHostException;
+import java.util.*;
 import java.util.concurrent.TimeoutException;
 
 /**
  * Created by ola on 05.01.16.
  */
 public class Node implements Observer {
+    private final String id = UUID.randomUUID().toString();
+
     // ADDRESSES
     private String trackerHost;
     private int trackerPort;
     private int serverPort;
+    private int clientPort;
 
     // CONNECTIONS
     private Connection tracker;
@@ -29,10 +30,11 @@ public class Node implements Observer {
 
     // PUBLIC METHODS
 
-    public Node(String trackerHost, int trackerPort, int serverPort) {
+    public Node(String trackerHost, int trackerPort, int serverPort, int clientPort) {
         this.trackerHost = trackerHost;
         this.trackerPort = trackerPort;
         this.serverPort = serverPort;
+        this.clientPort = clientPort;
         nodes = new ArrayList<>();
     }
 
@@ -52,12 +54,12 @@ public class Node implements Observer {
 
     public void stop() {
         if(server != null)
-            server.close();
+            server.stop();
         if(ping != null)
-            ping.close();
+            ping.stop();
         if(tracker != null)
             tracker.close();
-        nodes.forEach(Connection::close);
+        nodes.forEach(Connection::closeNoNotify);
     }
 
     public void getResource() throws TimeoutException {
@@ -71,51 +73,102 @@ public class Node implements Observer {
     @Override
     public void update(Observable o, Object arg) {
         if(o == ping) {
-            System.out.println("Ping stop.");
+            System.out.println("Ping "
+                    + ((boolean)arg ? "started." : "stopped."));
         } else if(o == server) {
-            System.out.println("Server stop.");
-        } else if(o == tracker) {
-            System.out.println("Connection with tracker stop.");
-        } else if(nodes.contains(o)) {
-            System.out.println("Connection with node stop.");
+            System.out.println("Server "
+                    + ((boolean)arg ? "started." : "stopped."));
+        } else {
+            Connection conn = (Connection) o;
+            if(conn == tracker) {
+                System.out.println("Connection with tracker stopped.");
+                ping.stop();
+            } else if(nodes.contains(conn)) {
+                System.out.println("Connection with " + conn.getId() + " node stopped.");
+                nodes.remove(conn);
+            }
         }
     }
 
-    // CALLBACKS AND HANDLERS
+    // MAIN HANDLERS
 
     @SuppressWarnings("unused")
-    void nodeCallback(Message msg) {
-        System.out.println("Node callback: " + msg.toString());
+    void handleNodeMessage(String data) {
+        System.out.println("Node callback: " + data);
     }
 
     @SuppressWarnings("unused")
-    void trackerCallback(Message msg) {
-        System.out.println("Tracker callback: " + msg.toString());
+    void handleTrackerMessage(String data) {
+        System.out.println("Tracker callback: " + data);
+        Message msg = new Message(data);
+        switch(msg.getType()) {
+            case JOIN_NETWORK_RESP:
+                handleJoinNetworkResp(new AddressMessage(data));
+                return;
+            case INVALID:
+                System.out.println("Invalid message received.");
+        }
     }
 
     @SuppressWarnings("unused")
-    void handleNewConnection(Socket socket) throws NoSuchMethodException {
-        Class params[] = {Message.class};
-        Connection node = new Connection(socket, Node.class.getDeclaredMethod("nodeCallback", params), this);
-        node.addObserver(this);
-        nodes.add(node);
-        System.out.println("new node");
+    void handleNewConnection(Socket socket) {
+        try {
+            Class params[] = {String.class};
+            Connection node = new Connection(socket,
+                    Node.class.getDeclaredMethod("handleNodeMessage", params), this);
+            node.addObserver(this);
+            nodes.add(node);
+            System.out.println("Connection with new node started.");
+        } catch (NoSuchMethodException e) {
+            e.printStackTrace();
+        }
     }
+
+    // MESSAGES HANDLERS
+
+    void handleJoinNetworkResp(AddressMessage msg) {
+        try {
+            Class params[] = {String.class};
+            Connection node = new Connection(msg.getId(),
+                    new Socket(msg.getIp(), msg.getPort()),
+                    Node.class.getDeclaredMethod("handleNodeMessage", params), this);
+            node.addObserver(this);
+            nodes.add(node);
+            System.out.println("Connection with " + node.getId() + " node started.");
+        } catch (NoSuchMethodException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            System.out.println("Cannot connect " + msg.getId() + " node.");
+            // TODO
+        }
+    }
+
+    // SEND FUNCTIONS
+
+    void sendJoinNetworkReq() {
+        tracker.write(new IdMessage(Type.JOIN_NETWORK_REQ, id, clientPort));
+    }
+
 
     // OTHERS
 
     private void connectTracker() throws IOException, NoSuchMethodException {
-        Class params[] = {Message.class};
-        tracker = new Connection(new Socket(trackerHost, trackerPort),
-                Node.class.getDeclaredMethod("trackerCallback", params), this);
+        Class params[] = {String.class};
+        tracker = new Connection("tracker", new Socket(trackerHost, trackerPort),
+                Node.class.getDeclaredMethod("handleTrackerMessage", params), this);
         tracker.addObserver(this);
+        System.out.println("Connection with tracker started.");
         ping = new Ping(tracker);
         ping.addObserver(this);
+        ping.start();
+        sendJoinNetworkReq();
     }
 
     private void startServer() throws IOException, NoSuchMethodException {
         Class params[] = {Socket.class};
-        server = new Server(serverPort, Node.class.getDeclaredMethod("handleNewConnection", params), this);
+        server = new Server(serverPort,
+                Node.class.getDeclaredMethod("handleNewConnection", params), this);
         server.addObserver(this);
+        server.start();
     }
 }

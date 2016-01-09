@@ -14,53 +14,73 @@ import java.util.Observable;
  * Created by ola on 06.01.16.
  */
 public class Connection extends Observable {
+    private String id = "unknown";
     private Socket socket;
-    private Method callback;
-    private Object callbackObj;
     private Thread receiver;
+    private boolean running = true;
 
-    public Connection(Socket socket, Method callback, Object obj) {
+    public Connection(Socket socket, Method callback, Object callbackObj) {
         this.socket = socket;
-        this.callback = callback;
-        this.callbackObj = obj;
-
         receiver = new Thread() {
             @Override
             public void run() {
                 try {
                     BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
                     String input;
-                    while (!isInterrupted()) {
-                        if ((input = in.readLine()) != null) {
-                            callback.invoke(callbackObj, new Message(input));
-                        }
+                    while (!isInterrupted() && (input = in.readLine()) != null) {
+                        callback.invoke(callbackObj, input);
                     }
+                    setState(false);
                 } catch (Exception e) {
-                    setChanged();
-                    notifyObservers();
+                    setState(false);
                 }
             }
         };
         receiver.start();
     }
 
-    public boolean write(Message msg) {
+    public Connection(String id, Socket socket, Method callback, Object callbackObj) {
+        this(socket, callback, callbackObj);
+        this.id = id;
+    }
+
+    public void write(Message msg) {
         try {
             PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
             String outputLine = msg.toString();
             out.println(outputLine);
         } catch (IOException e) {
-            return false;
+            setState(false);
         }
-        return true;
     }
 
-    public void close() {
+    public void closeNoNotify() {
         try {
             receiver.interrupt();
             socket.close();
         } catch (IOException e) {
             e.printStackTrace();
+        }
+    }
+
+    public void close() {
+        setState(false);
+        closeNoNotify();
+    }
+
+    public String getId() {
+        return id;
+    }
+
+    public void setId(String id) {
+        this.id = id;
+    }
+
+    private void setState(boolean newRunning) {
+        if(running != newRunning) {
+            running = newRunning;
+            setChanged();
+            notifyObservers(running);
         }
     }
 }

@@ -4,19 +4,20 @@ package sr.akarbarc.msgs;
  * Created by ola on 07.01.16.
  */
 public enum Type {
-    TRACKER_PING(0),
-    NODE_WANT_TO_CONNECT_NETWORK(1),
-    TRACKER_REQUEST_NODE_TO_CONNECT(2),
-    NODE_ID(3),
-    NODE_DISCONNECT(4),
-    NODE_WANT_TO_GET_RESOURCE(5),
-    NODE_RESOURCE_RECEIVED(6),
-    NODE_ACCEPT_TO_GET_RESOURCE(7),
-    NODE_CONNECTION_LIST(8),
-    NODE_ELECT(9),
-    NODE_WANT_TO_ELECT(10),
-    TRACKER_AGREEMENT_TO_ELECT(11),
-    NODE_ELECTION_FINISHED(12);
+    INVALID(-1),
+    PING(0),
+    JOIN_NETWORK_REQ(1),
+    JOIN_NETWORK_RESP(2),
+    HELLO(3),
+    DISCONNECT(4),
+    TOKEN_REQ(5),
+    TOKEN_RECEIVED(6),
+    TOKEN_ACCEPT_RESP(7),
+    CONNECTIONS_INFO(8),
+    ELECTION_LEADER(9),
+    ELECTION_REQ(10),
+    ELECTION_ACCEPT_RESP(11),
+    ELECTION_FINISHED(12);
 
     private int typeNum;
 
@@ -32,6 +33,6 @@ public enum Type {
         for(Type type: Type.values())
             if(type.typeNum == num)
                 return type;
-        return null;
+        return INVALID;
     }
 }
