@@ -7,7 +7,7 @@ import org.json.JSONObject;
  * Created by ola on 07.01.16.
  */
 public class Message {
-    private Type type;
+    protected Type type;
 
     public Message(Type type) {
         this.type = type;

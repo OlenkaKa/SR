@@ -18,7 +18,6 @@ public class Node implements Observer {
     private String trackerHost;
     private int trackerPort;
     private int serverPort;
-    private int clientPort;
 
     // CONNECTIONS
     private Connection tracker;
@@ -30,18 +29,17 @@ public class Node implements Observer {
 
     // PUBLIC METHODS
 
-    public Node(String trackerHost, int trackerPort, int serverPort, int clientPort) {
+    public Node(String trackerHost, int trackerPort, int serverPort) {
         this.trackerHost = trackerHost;
         this.trackerPort = trackerPort;
         this.serverPort = serverPort;
-        this.clientPort = clientPort;
         nodes = new ArrayList<>();
     }
 
     public boolean start() {
         try {
-            connectTracker();
             startServer();
+            connectTracker();
         } catch (IOException e) {
             return false;
         }
@@ -127,6 +125,12 @@ public class Node implements Observer {
     // MESSAGES HANDLERS
 
     void handleJoinNetworkResp(AddressMessage msg) {
+        if(msg.getType() == Type.INVALID) {
+            System.out.println("Invalid message received.");
+            return;
+        } else if(msg.getId().equals(id))
+            return;
+
         try {
             Class params[] = {String.class};
             Connection node = new Connection(msg.getId(),
@@ -146,7 +150,7 @@ public class Node implements Observer {
     // SEND FUNCTIONS
 
     void sendJoinNetworkReq() {
-        tracker.write(new IdMessage(Type.JOIN_NETWORK_REQ, id, clientPort));
+        tracker.write(new IdMessage(Type.JOIN_NETWORK_REQ, id, serverPort));
     }
 
 

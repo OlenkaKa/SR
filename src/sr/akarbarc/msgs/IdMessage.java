@@ -1,5 +1,6 @@
 package sr.akarbarc.msgs;
 
+import org.json.JSONException;
 import org.json.JSONObject;
 
 /**
@@ -17,9 +18,14 @@ public class IdMessage extends Message {
 
     public IdMessage(String data) {
         super(data);
-        JSONObject json = new JSONObject();
-        id = json.getString("id");
-        port = json.getInt("port");
+        // TODO: remove try?
+        try {
+            JSONObject json = new JSONObject(data);
+            id = json.getString("id");
+            port = json.getInt("port");
+        } catch (JSONException e) {
+            type = Type.INVALID;
+        }
     }
 
     public String getId() {

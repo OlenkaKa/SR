@@ -2,10 +2,9 @@ package sr.akarbarc.node;
 
 import sr.akarbarc.msgs.Message;
 
-import java.io.BufferedReader;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
 import java.lang.reflect.Method;
 import java.net.Socket;
 import java.util.Observable;
@@ -25,10 +24,13 @@ public class Connection extends Observable {
             @Override
             public void run() {
                 try {
-                    BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-                    String input;
-                    while (!isInterrupted() && (input = in.readLine()) != null) {
-                        callback.invoke(callbackObj, input);
+                    DataInputStream in = new DataInputStream(socket.getInputStream());
+                    byte input[] = new byte[1024];
+                    int size;
+                    while (!isInterrupted()) {
+                        size = in.readInt();
+                        in.read(input, 0, size);
+                        callback.invoke(callbackObj, new String(input));
                     }
                     setState(false);
                 } catch (Exception e) {
@@ -46,9 +48,10 @@ public class Connection extends Observable {
 
     public void write(Message msg) {
         try {
-            PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
-            String outputLine = msg.toString();
-            out.println(outputLine);
+            DataOutputStream out = new DataOutputStream(socket.getOutputStream());
+            byte data[] = msg.toString().getBytes();
+            out.writeInt(data.length);
+            out.write(data);
         } catch (IOException e) {
             setState(false);
         }

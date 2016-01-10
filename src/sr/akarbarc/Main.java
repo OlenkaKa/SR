@@ -7,16 +7,15 @@ import java.util.Scanner;
 public class Main {
 
     public static void main(String[] args) {
-        if (args.length < 4) {
-            System.err.println("Usage: Main tracker_host tracker_port server_port client_port");
+        if (args.length < 3) {
+            System.err.println("Usage: Main tracker_host tracker_port server_port");
             System.exit(1);
         }
         String trackerHost = args[0];
         int trackerPort = Integer.parseInt(args[1]);
         int serverPort = Integer.parseInt(args[2]);
-        int clientPort = Integer.parseInt(args[3]);
 
-        Node node = new Node(trackerHost, trackerPort, serverPort, clientPort);
+        Node node = new Node(trackerHost, trackerPort, serverPort);
         try {
             if(!node.start()) {
                 System.out.println("Failed to start node.");
