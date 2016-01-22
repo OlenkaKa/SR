@@ -16,6 +16,7 @@ public class Main {
         int serverPort = Integer.parseInt(args[2]);
 
         Node node = new Node(trackerHost, trackerPort, serverPort);
+        System.out.println("Node id: " + node.getId());
         try {
             if(!node.start()) {
                 System.out.println("Failed to start node.");

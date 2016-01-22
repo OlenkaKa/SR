@@ -30,7 +30,7 @@ public class Connection extends Observable {
                     while (!isInterrupted()) {
                         size = in.readInt();
                         in.read(input, 0, size);
-                        callback.invoke(callbackObj, new String(input));
+                        callback.invoke(callbackObj, new String(input), Connection.this);
                     }
                     setState(false);
                 } catch (Exception e) {
@@ -73,6 +73,10 @@ public class Connection extends Observable {
 
     public String getId() {
         return id;
+    }
+
+    public String getIp() {
+        return socket.getInetAddress().getHostAddress();
     }
 
     public void setId(String id) {

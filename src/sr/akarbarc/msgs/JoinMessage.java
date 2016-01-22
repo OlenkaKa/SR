@@ -6,39 +6,29 @@ import org.json.JSONObject;
 /**
  * Created by ola on 07.01.16.
  */
-public class AddressMessage extends Message {
+public class JoinMessage extends Message {
     private String id;
-    private String ip;
     private int port;
 
-    public AddressMessage(Type type, String id, String ip, int port) {
+    public JoinMessage(Type type, String id, int port) {
         super(type);
         this.id = id;
-        this.ip = ip;
         this.port = port;
     }
 
-    public AddressMessage(String data) {
+    public JoinMessage(String data) {
         super(data);
-        JSONObject json = new JSONObject(data);
         try {
+            JSONObject json = new JSONObject(data);
             id = json.getString("id");
+            port = json.getInt("port");
         } catch (JSONException e) {
             type = Type.INVALID;
-            return;
-        }
-        if(!json.isNull("ip") && !json.isNull("port")) {
-            ip = json.getString("ip");
-            port = json.getInt("port");
         }
     }
 
     public String getId() {
         return id;
-    }
-
-    public String getIp() {
-        return ip;
     }
 
     public int getPort() {
@@ -49,7 +39,6 @@ public class AddressMessage extends Message {
     protected void setData(JSONObject obj) {
         super.setData(obj);
         obj.put("id", id);
-        obj.put("ip", ip);
         obj.put("port", port);
     }
 }
