@@ -5,7 +5,6 @@ import sr.akarbarc.msgs.Message;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.lang.reflect.Method;
 import java.net.Socket;
 import java.util.Observable;
 
@@ -18,7 +17,7 @@ public class Connection extends Observable {
     private Thread receiver;
     private boolean running = true;
 
-    public Connection(Socket socket, Method callback, Object callbackObj) {
+    public Connection(Socket socket) {
         this.socket = socket;
         receiver = new Thread() {
             @Override
@@ -30,7 +29,8 @@ public class Connection extends Observable {
                     while (!isInterrupted()) {
                         size = in.readInt();
                         in.read(input, 0, size);
-                        callback.invoke(callbackObj, new String(input), Connection.this);
+                        setChanged();
+                        notifyObservers(new String(input));
                     }
                     setState(false);
                 } catch (Exception e) {
@@ -41,8 +41,8 @@ public class Connection extends Observable {
         receiver.start();
     }
 
-    public Connection(String id, Socket socket, Method callback, Object callbackObj) {
-        this(socket, callback, callbackObj);
+    public Connection(String id, Socket socket) {
+        this(socket);
         this.id = id;
     }
 
@@ -73,10 +73,6 @@ public class Connection extends Observable {
 
     public String getId() {
         return id;
-    }
-
-    public String getIp() {
-        return socket.getInetAddress().getHostAddress();
     }
 
     public void setId(String id) {

@@ -1,6 +1,5 @@
 package sr.akarbarc.msgs;
 
-import org.json.JSONException;
 import org.json.JSONObject;
 
 /**
@@ -14,25 +13,6 @@ public class JoinMessage extends Message {
         super(type);
         this.id = id;
         this.port = port;
-    }
-
-    public JoinMessage(String data) {
-        super(data);
-        try {
-            JSONObject json = new JSONObject(data);
-            id = json.getString("id");
-            port = json.getInt("port");
-        } catch (JSONException e) {
-            type = Type.INVALID;
-        }
-    }
-
-    public String getId() {
-        return id;
-    }
-
-    public int getPort() {
-        return port;
     }
 
     @Override

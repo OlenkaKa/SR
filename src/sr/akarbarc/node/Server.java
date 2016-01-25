@@ -1,7 +1,6 @@
 package sr.akarbarc.node;
 
 import java.io.IOException;
-import java.lang.reflect.Method;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Observable;
@@ -11,17 +10,13 @@ import java.util.Observable;
  */
 public class Server extends Observable {
     private int port;
-    private Method callback;
-    private Object callbackObj;
 
     private ServerSocket serverSocket;
     private Thread listener;
     private boolean running = false;
 
-    public Server(int port, Method callback, Object callbackObj) {
+    public Server(int port) {
         this.port = port;
-        this.callback = callback;
-        this.callbackObj = callbackObj;
     }
 
     public void start() throws IOException {
@@ -32,7 +27,8 @@ public class Server extends Observable {
                 try {
                     while (!isInterrupted()) {
                         Socket socket = serverSocket.accept();
-                        callback.invoke(callbackObj, socket);
+                        setChanged();
+                        notifyObservers(socket);
                     }
                 } catch (Exception e) {
                     Server.this.stop();

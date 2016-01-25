@@ -11,13 +11,6 @@ public class AddressMessage extends Message {
     private String ip;
     private int port;
 
-    public AddressMessage(Type type, String id, String ip, int port) {
-        super(type);
-        this.id = id;
-        this.ip = ip;
-        this.port = port;
-    }
-
     public AddressMessage(String data) {
         super(data);
         JSONObject json = new JSONObject(data);
@@ -27,10 +20,8 @@ public class AddressMessage extends Message {
             type = Type.INVALID;
             return;
         }
-        if(!json.isNull("ip") && !json.isNull("port")) {
-            ip = json.getString("ip");
-            port = json.getInt("port");
-        }
+        ip = json.isNull("ip") ? null : json.getString("ip");
+        port = json.isNull("port") ? -1 : json.getInt("port");
     }
 
     public String getId() {
