@@ -46,7 +46,7 @@ public class Connection extends Observable {
         this.id = id;
     }
 
-    public void write(Message msg) {
+    public synchronized void write(Message msg) {
         try {
             DataOutputStream out = new DataOutputStream(socket.getOutputStream());
             byte data[] = msg.toString().getBytes();
@@ -57,7 +57,7 @@ public class Connection extends Observable {
         }
     }
 
-    public void closeNoNotify() {
+    public synchronized void closeNoNotify() {
         try {
             receiver.interrupt();
             socket.close();
@@ -66,7 +66,7 @@ public class Connection extends Observable {
         }
     }
 
-    public void close() {
+    public synchronized void close() {
         setState(false);
         closeNoNotify();
     }

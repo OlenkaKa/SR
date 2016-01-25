@@ -1,5 +1,8 @@
 package sr.akarbarc.msgs;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 /**
  * Created by ola on 07.01.16.
  */
@@ -11,8 +14,8 @@ public enum Type {
     HELLO(3),
     DISCONNECT(4),
     TOKEN_REQ(5),
-    TOKEN_RECEIVED(6),
-    TOKEN_ACCEPT_RESP(7),
+    TOKEN_REQ_RECEIVED(6),
+    TOKEN(7),
     CONNECTIONS_INFO(8),
     ELECTION_LEADER(9),
     ELECTION_REQ(10),
@@ -34,5 +37,14 @@ public enum Type {
             if(type.typeNum == num)
                 return type;
         return INVALID;
+    }
+
+    public static Type getType(String jsonString) {
+        JSONObject obj = new JSONObject(jsonString);
+        try {
+            return getType(obj.getInt("type"));
+        } catch (JSONException e) {
+            return INVALID;
+        }
     }
 }

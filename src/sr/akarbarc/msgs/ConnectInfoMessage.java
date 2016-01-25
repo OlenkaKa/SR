@@ -5,11 +5,11 @@ import org.json.JSONObject;
 /**
  * Created by ola on 07.01.16.
  */
-public class JoinMessage extends Message {
+public class ConnectInfoMessage extends Message {
     private String id;
     private int port;
 
-    public JoinMessage(Type type, String id, int port) {
+    public ConnectInfoMessage(Type type, String id, int port) {
         super(type);
         this.id = id;
         this.port = port;
