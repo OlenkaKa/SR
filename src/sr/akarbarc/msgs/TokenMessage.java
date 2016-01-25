@@ -12,9 +12,27 @@ import java.util.List;
  */
 public class TokenMessage extends Message {
     private String dst_id;
-    private List<Member> table = new ArrayList<>();
+    private List<TableElem> table = new ArrayList<>();
 
-    public static String checkDestination(String data) {
+    public class TableElem {
+        private String id;
+        private int r;
+        private int g;
+
+        public String getId() {
+            return id;
+        }
+
+        public int getR() {
+            return r;
+        }
+
+        public int getG() {
+            return g;
+        }
+    }
+
+    public static String getDestination(String data) {
         JSONObject json = new JSONObject(data);
         return json.isNull("dst_id") ? null : json.getString("dst_id");
     }
@@ -31,48 +49,49 @@ public class TokenMessage extends Message {
             JSONArray jsonTable = json.getJSONArray("table");
             for (int i = 0; i < jsonTable.length(); ++i) {
                 JSONObject obj = jsonTable.getJSONObject(i);
-                Member cell = new Member();
-                cell.id = obj.getString("id");
-                cell.r = obj.getInt("r");
-                cell.g = obj.getInt("g");
-                table.add(cell);
+                TableElem elem = new TableElem();
+                elem.id = obj.getString("id");
+                elem.r = obj.getInt("r");
+                elem.g = obj.getInt("g");
+                table.add(elem);
             }
         } catch (JSONException e) {
             type = Type.INVALID;
         }
     }
 
+    public String getDstId() {
+        return dst_id;
+    }
+
+    public List<TableElem> getTable() {
+        return table;
+    }
+
     public void setDstId(String dstId) {
         this.dst_id = dstId;
     }
 
-    public void addTableCell(String id, int r, int g) {
-        Member cell = new Member();
-        cell.id = id;
-        cell.r = r;
-        cell.g = g;
-        table.add(cell);
+    public void addTableElem(String id, int r, int g) {
+        TableElem elem = new TableElem();
+        elem.id = id;
+        elem.r = r;
+        elem.g = g;
+        table.add(elem);
     }
 
     @Override
     protected void setData(JSONObject obj) {
         super.setData(obj);
         obj.put("dst_id", dst_id);
-        JSONArray jsonArray = new JSONArray();
-        for (Member cell : table) {
-            JSONObject cellObj = new JSONObject();
-            cellObj.put("id", cell.id);
-            cellObj.put("r", cell.r);
-            cellObj.put("g", cell.g);
-            jsonArray.put(cellObj);
+        JSONArray jTable = new JSONArray();
+        for (TableElem elem: table) {
+            JSONObject jElem = new JSONObject();
+            jElem.put("id", elem.id);
+            jElem.put("r", elem.r);
+            jElem.put("g", elem.g);
+            jTable.put(jElem);
         }
-        obj.put("table", jsonArray);
+        obj.put("table", jTable);
     }
-}
-
-
-class Member {
-    String id;
-    int r;
-    int g;
 }

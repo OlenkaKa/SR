@@ -27,6 +27,7 @@ public class Node implements Observer {
     // THREADS
     private Ping ping;
     private Server server;
+    private Thread user;
 
     // RICHART-AGRAWALA
     private Token token = null;
@@ -77,15 +78,26 @@ public class Node implements Observer {
         disconnect();
     }
 
-    public void getResource() {
-        sendAll(new TokenReqMessage(Type.TOKEN_REQ, id, clock.increaseTime()));
+    public void getResource() throws InterruptedException {
+        if (token != null)
+            token.setInUse(true);
+        else {
+            sendAll(new TokenReqMessage(Type.TOKEN_REQ, id, clock.increaseTime()));
+            user = Thread.currentThread();
+            synchronized (user) {
+                user.wait();
+            }
+        }
     }
 
     public void releaseResource() {
         token.setMemberG(id, clock.increaseTime());
-        TokenMessage msg = token.createTokenMessage(id);
-        token = null;
-        sendAll(msg);
+        token.setInUse(false);
+        if (token.setNextOwner()) {
+            TokenMessage msg = token.createMessage();
+            token = null;
+            sendAll(msg);
+        }
     }
 
     @Override
@@ -145,6 +157,9 @@ public class Node implements Observer {
             case TOKEN_REQ_RECEIVED:
                 handleTokenReqReceived(data, node);
                 return;
+            case TOKEN:
+                handleToken(data, node);
+                return;
             case INVALID:
                 logger.warning("Invalid message received.");
         }
@@ -175,6 +190,8 @@ public class Node implements Observer {
             // node is a root so it receives a token
             token = new Token();
             token.addMember(id);
+            token.setOwner(id);
+            token.setInUse(false);
             return;
         } else if (msg.getIp().equals("0.0.0.0")) {
             stop();
@@ -222,11 +239,31 @@ public class Node implements Observer {
         else {
             token.setMemberR(msg.getId(), msg.getR());
             send(new IdMessage(Type.TOKEN_REQ_RECEIVED, msg.getId()), sender);
+            logger.info("Send token request receive to " + msg.getId() + " node.");
+
+            if (!token.isInUse() &&token.setNextOwner()) {
+                TokenMessage tokenMsg = token.createMessage();
+                token = null;
+                send(tokenMsg, sender);
+            }
         }
     }
 
     private void handleTokenReqReceived(String data, Connection sender) {
         // TODO
+    }
+
+    private void handleToken(String data, Connection sender) {
+        TokenMessage msg = new TokenMessage(data);
+        if (msg.getDstId().equals(id)) {
+            token = Token.createToken(msg);
+            synchronized (user) {
+                if (user != null)
+                    user.notify();
+            }
+        } else {
+            sendForward(msg, sender);
+        }
     }
 
 

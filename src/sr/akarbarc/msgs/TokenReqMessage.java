@@ -20,6 +20,7 @@ public class TokenReqMessage extends Message {
         super(data);
         try {
             JSONObject obj = new JSONObject(data);
+            id = obj.getString("id");
             r = obj.getInt("r");
         } catch (JSONException e) {
             type = Type.INVALID;
@@ -38,6 +39,6 @@ public class TokenReqMessage extends Message {
     protected void setData(JSONObject obj) {
         super.setData(obj);
         obj.put("id", id);
-        obj.put("r", id);
+        obj.put("r", r);
     }
 }
