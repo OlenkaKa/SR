@@ -36,6 +36,7 @@ public class Node implements Observer {
     // SYNCHRONIZATION
     final Object trackerLock = new Object();
     final Object nodesLock = new Object();
+    final Object tokenLock = new Object();
 
     // PUBLIC METHODS
 
@@ -79,10 +80,17 @@ public class Node implements Observer {
     }
 
     public void getResource() throws InterruptedException {
-        if (token != null)
-            token.setInUse(true);
-        else {
-            sendAll(new TokenReqMessage(Type.TOKEN_REQ, id, clock.increaseTime()));
+        synchronized (tokenLock) {
+            if (token != null) {
+                token.setInUse(true);
+                token.addMember(id);
+                token.setMemberR(id, clock.increaseTime());
+                token.setOwner(id);
+                return;
+            }
+        }
+        sendAll(new TokenReqMessage(Type.TOKEN_REQ, id, clock.increaseTime()));
+        if (user == null) {
             user = Thread.currentThread();
             synchronized (user) {
                 user.wait();
@@ -91,12 +99,14 @@ public class Node implements Observer {
     }
 
     public void releaseResource() {
-        token.setMemberG(id, clock.increaseTime());
-        token.setInUse(false);
-        if (token.setNextOwner()) {
-            TokenMessage msg = token.createMessage();
-            token = null;
-            sendAll(msg);
+        synchronized (tokenLock) {
+            token.setMemberG(id, clock.increaseTime());
+            token.setInUse(false);
+            if (token.setNextOwner()) {
+                TokenMessage msg = token.createMessage();
+                token = null;
+                sendAll(msg);
+            }
         }
     }
 
@@ -189,8 +199,6 @@ public class Node implements Observer {
         if (msg.getId().equals(id)) {
             // node is a root so it receives a token
             token = new Token();
-            token.addMember(id);
-            token.setOwner(id);
             token.setInUse(false);
             return;
         } else if (msg.getIp().equals("0.0.0.0")) {
@@ -211,40 +219,51 @@ public class Node implements Observer {
 
     private void handleHello(String data, Connection sender) {
         IdMessage msg = new IdMessage(data);
-        sender.setId(msg.getId());
-        logger.info("Set id for node: " + sender.getId());
+        String newId = msg.getId();
+        sender.setId(newId);
+        logger.info("Set id for node: " + newId);
 
-        if (token != null) {
-            token.addMember(sender.getId());
-            logger.info("Node " + sender.getId() + " added to token table.");
+        synchronized (tokenLock) {
+            if (token != null) {
+                token.addMember(sender.getId());
+                logger.info("Node " + sender.getId() + " added to token table.");
+            }
         }
     }
 
     private void handleDisconnect(String data, Connection sender) {
         // removing node from nodes in update method
         IdMessage msg = new IdMessage(data);
+        String disconnectedId = msg.getId();
         sendForward(msg, sender);
-        logger.info("Disconnect message received - node " + msg.getId());
+        logger.info("Disconnect message received - node " + disconnectedId);
 
-        if (token != null) {
-            token.removeMember(sender.getId());
-            logger.info("Node " + sender.getId() + " removed from token table.");
+        synchronized (tokenLock) {
+            if (token != null) {
+                token.removeMember(disconnectedId);
+                logger.info("Node " + disconnectedId + " removed from token table.");
+            }
         }
     }
 
     private void handleTokenReq(String data, Connection sender) {
         TokenReqMessage msg = new TokenReqMessage(data);
-        if (token == null)
-            sendForward(msg, sender);
-        else {
-            token.setMemberR(msg.getId(), msg.getR());
-            send(new IdMessage(Type.TOKEN_REQ_RECEIVED, msg.getId()), sender);
-            logger.info("Send token request receive to " + msg.getId() + " node.");
 
-            if (!token.isInUse() &&token.setNextOwner()) {
-                TokenMessage tokenMsg = token.createMessage();
-                token = null;
-                send(tokenMsg, sender);
+        synchronized (tokenLock) {
+            if (token == null)
+                sendForward(msg, sender);
+            else {
+                String reqId = msg.getId();
+                token.addMember(reqId);
+                token.setMemberR(reqId, msg.getR());
+                send(new IdMessage(Type.TOKEN_REQ_RECEIVED, reqId), sender);
+                logger.info("Send token request receive to " + reqId + " node.");
+
+                if (!token.isInUse() && token.setNextOwner()) {
+                    TokenMessage tokenMsg = token.createMessage();
+                    token = null;
+                    send(tokenMsg, sender);
+                }
             }
         }
     }
@@ -258,8 +277,10 @@ public class Node implements Observer {
         if (msg.getDstId().equals(id)) {
             token = Token.createToken(msg);
             synchronized (user) {
-                if (user != null)
+                if (user != null) {
                     user.notify();
+                    user = null;
+                }
             }
         } else {
             sendForward(msg, sender);

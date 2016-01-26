@@ -34,6 +34,10 @@ public class Token {
     }
 
     public synchronized void addMember(String id) {
+        for (Member member: members) {
+            if (member.id.equals(id))
+                return;
+        }
         Member member = new Member(id);
         members.add(member);
     }
@@ -57,7 +61,8 @@ public class Token {
     // return false when there is no waiting nodes
     public synchronized boolean setNextOwner() {
         int endIdx = members.indexOf(owner);
-        for (int i = (endIdx + 1) % members.size(); i != endIdx; i = ++i % members.size()) {
+        int size = members.size();
+        for (int i = (endIdx + 1) % size; i != endIdx; i = ++i % size) {
             Member member = members.get(i);
             if (member.r > member.g) {
                 owner = member;
