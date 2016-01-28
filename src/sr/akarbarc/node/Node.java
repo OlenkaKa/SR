@@ -144,6 +144,9 @@ public class Node implements Observer {
                 if (arg instanceof Boolean) {
                     logger.info("Connection with " + conn.getId() + " node stopped.");
                     removeNode(conn);
+                    IdMessage msg = new IdMessage(Type.DISCONNECT, conn.getId());
+                    sendAll(msg);
+                    send(msg, tracker);
                 } else if (arg instanceof String)
                     handleNodeMessage((String) arg, conn);
             }
@@ -181,6 +184,9 @@ public class Node implements Observer {
             case JOIN_NETWORK_RESP:
                 handleJoinNetworkResp(data);
                 return;
+            case DISCONNECT:
+                handleDisconnect(data, tracker);
+                return;
             case INVALID:
                 logger.warning("Invalid message received.");
         }
@@ -198,8 +204,10 @@ public class Node implements Observer {
         AddressMessage msg = new AddressMessage(data);
         if (msg.getId().equals(id)) {
             // node is a root so it receives a token
-            token = new Token();
-            token.setInUse(false);
+            synchronized (tokenLock) {
+                token = new Token();
+                token.setInUse(false);
+            }
             return;
         } else if (msg.getIp().equals("0.0.0.0")) {
             stop();
@@ -222,27 +230,19 @@ public class Node implements Observer {
         String newId = msg.getId();
         sender.setId(newId);
         logger.info("Set id for node: " + newId);
-
-        synchronized (tokenLock) {
-            if (token != null) {
-                token.addMember(sender.getId());
-                logger.info("Node " + sender.getId() + " added to token table.");
-            }
-        }
     }
 
     private void handleDisconnect(String data, Connection sender) {
-        // removing node from nodes in update method
         IdMessage msg = new IdMessage(data);
         String disconnectedId = msg.getId();
+
         sendForward(msg, sender);
         logger.info("Disconnect message received - node " + disconnectedId);
 
+        removeNode(disconnectedId);
         synchronized (tokenLock) {
-            if (token != null) {
+            if (token != null)
                 token.removeMember(disconnectedId);
-                logger.info("Node " + disconnectedId + " removed from token table.");
-            }
         }
     }
 
@@ -275,7 +275,9 @@ public class Node implements Observer {
     private void handleToken(String data, Connection sender) {
         TokenMessage msg = new TokenMessage(data);
         if (msg.getDstId().equals(id)) {
-            token = Token.createToken(msg);
+            synchronized (tokenLock) {
+                token = Token.createToken(msg);
+            }
             synchronized (user) {
                 if (user != null) {
                     user.notify();
@@ -290,24 +292,43 @@ public class Node implements Observer {
 
     // OTHERS
 
-    private void addNode(Connection node) {
-        node.addObserver(this);
+    private void addNode(Connection newNode) {
         synchronized (nodesLock) {
-            nodes.add(node);
+            String newId = newNode.getId();
+            if (newId != null)
+                for (Connection node: nodes)
+                    if (node.getId().equals(newId)) {
+                        logger.warning("Node with " + newId + " already exists.");
+                    }
+
+            newNode.addObserver(this);
+            nodes.add(newNode);
+            logger.info("Node " + newId + " added to nodes table");
         }
     }
 
     private void removeNode(Connection node) {
-        boolean removed;
         synchronized (nodesLock) {
-            removed = nodes.remove(node);
+            nodes.remove(node);
+            logger.info("Node " + node.getId() + " removed from nodes table");
         }
-        if (removed)
-            sendAll(new IdMessage(Type.DISCONNECT, node.getId()));
+    }
+
+    private void removeNode(String id) {
+        synchronized (nodesLock) {
+            for (Connection node: nodes)
+                if (node.getId().equals(id)) {
+                    nodes.remove(node);
+                    logger.info("Node " + node.getId() + " removed from nodes table");
+                    return;
+                }
+        }
     }
 
     private void send(Message msg, Connection receiver) {
-        receiver.write(msg);
+        synchronized (receiver == tracker ? trackerLock : nodesLock) {
+            receiver.write(msg);
+        }
     }
 
     private void sendAll(Message msg) {
@@ -324,9 +345,14 @@ public class Node implements Observer {
     }
 
     private void disconnect() {
-        sendAll(new IdMessage(Type.DISCONNECT, id));
-        if (tracker != null)
-            tracker.close();
+        //IdMessage msg = new IdMessage(Type.DISCONNECT, id);
+        //sendAll(msg);
+        synchronized (trackerLock) {
+            if (tracker != null) {
+                //send(msg, tracker);
+                tracker.close();
+            }
+        }
         synchronized (nodesLock) {
             nodes.forEach(Connection::closeNoNotify);
         }

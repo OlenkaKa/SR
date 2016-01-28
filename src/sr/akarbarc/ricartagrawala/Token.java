@@ -5,11 +5,13 @@ import sr.akarbarc.msgs.Type;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Logger;
 
 /**
  * Created by ola on 23.01.16.
  */
 public class Token {
+    private static final Logger logger = Logger.getLogger(Token.class.getName());
     private boolean inUse = true;
     private Member owner;
     private List<Member> members = new ArrayList<>();
@@ -40,22 +42,32 @@ public class Token {
         }
         Member member = new Member(id);
         members.add(member);
+        logger.info("Node " + member.id + " added to token table.");
     }
 
     public synchronized void removeMember(String id) {
         for (Member member: members)
             if (member.id.equals(id)) {
                 members.remove(member);
+                logger.info("Node " + member.id + " removed from token table.");
                 return;
             }
     }
 
     public synchronized void setMemberR(String id, int r) {
-        members.stream().filter(cell -> cell.id.equals(id)).forEach(cell -> cell.r = r);
+        for (Member member: members)
+            if (member.id.equals(id)) {
+                member.r = r;
+                return;
+            }
     }
 
     public synchronized void setMemberG(String id, int g) {
-        members.stream().filter(cell -> cell.id.equals(id)).forEach(cell -> cell.g = g);
+        for (Member member: members)
+            if (member.id.equals(id)) {
+                member.g = g;
+                return;
+            }
     }
 
     // return false when there is no waiting nodes

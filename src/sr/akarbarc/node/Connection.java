@@ -12,7 +12,7 @@ import java.util.Observable;
  * Created by ola on 06.01.16.
  */
 public class Connection extends Observable {
-    private String id = "unknown";
+    private String id;
     private Socket socket;
     private Thread receiver;
     private boolean running = true;
