@@ -71,15 +71,15 @@ public class Connection extends Observable {
         closeNoNotify();
     }
 
-    public String getId() {
+    public synchronized String getId() {
         return id;
     }
 
-    public void setId(String id) {
+    public synchronized void setId(String id) {
         this.id = id;
     }
 
-    private void setState(boolean newRunning) {
+    private synchronized void setState(boolean newRunning) {
         if(running != newRunning) {
             running = newRunning;
             setChanged();

@@ -14,6 +14,7 @@ import java.util.logging.Logger;
 public class Node implements Observer {
     private static final Logger logger = Logger.getLogger(Node.class.getName());
     private final String id = UUID.randomUUID().toString();
+    private boolean joinNetwork = false;
 
     // ADDRESSES
     private String trackerHost;
@@ -143,7 +144,13 @@ public class Node implements Observer {
             if (nodes.contains(conn)) {
                 if (arg instanceof Boolean) {
                     logger.info("Connection with " + conn.getId() + " node stopped.");
+
                     removeNode(conn);
+                    synchronized (tokenLock) {
+                        if (token != null)
+                            token.removeMember(conn.getId());
+                    }
+
                     IdMessage msg = new IdMessage(Type.DISCONNECT, conn.getId());
                     sendAll(msg);
                     send(msg, tracker);
@@ -202,27 +209,30 @@ public class Node implements Observer {
 
     private void handleJoinNetworkResp(String data) {
         AddressMessage msg = new AddressMessage(data);
-        if (msg.getId().equals(id)) {
-            // node is a root so it receives a token
-            synchronized (tokenLock) {
-                token = new Token();
-                token.setInUse(false);
-            }
-            return;
-        } else if (msg.getIp().equals("0.0.0.0")) {
-            stop();
-            return;
-        }
 
-        try {
-            Connection node = new Connection(msg.getId(), new Socket(msg.getIp(), msg.getPort()));
-            addNode(node);
-            send(new IdMessage(Type.HELLO, id), node);
-            logger.info("Connection with " + node.getId() + " node started.");
-        } catch (IOException e) {
-            logger.warning("Cannot connect " + msg.getId() + " node.");
-            // TODO
+        if (msg.getId().equals(id)) {
+            // node is a root
+            if (!joinNetwork) {
+                synchronized (tokenLock) {
+                    token = new Token();
+                    token.setInUse(false);
+                }
+            }
+        } else if (msg.getIp().equals("0.0.0.0")) {
+            // election
+            stop();
+        } else {
+            try {
+                Connection node = new Connection(msg.getId(), new Socket(msg.getIp(), msg.getPort()));
+                addNode(node);
+                send(new IdMessage(Type.HELLO, id), node);
+                logger.info("Connection with " + node.getId() + " node started.");
+            } catch (IOException e) {
+                logger.warning("Cannot connect " + msg.getId() + " node.");
+                // TODO
+            }
         }
+        joinNetwork = true;
     }
 
     private void handleHello(String data, Connection sender) {
@@ -239,7 +249,7 @@ public class Node implements Observer {
         sendForward(msg, sender);
         logger.info("Disconnect message received - node " + disconnectedId);
 
-        removeNode(disconnectedId);
+        removeNode(getNode(disconnectedId));
         synchronized (tokenLock) {
             if (token != null)
                 token.removeMember(disconnectedId);
@@ -299,29 +309,28 @@ public class Node implements Observer {
                 for (Connection node: nodes)
                     if (node.getId().equals(newId)) {
                         logger.warning("Node with " + newId + " already exists.");
+                        return;
                     }
 
             newNode.addObserver(this);
             nodes.add(newNode);
-            logger.info("Node " + newId + " added to nodes table");
+            logger.fine("Node " + newId + " added to nodes table");
         }
     }
 
     private void removeNode(Connection node) {
         synchronized (nodesLock) {
             nodes.remove(node);
-            logger.info("Node " + node.getId() + " removed from nodes table");
+            logger.fine("Node " + node.getId() + " removed from nodes table");
         }
     }
 
-    private void removeNode(String id) {
+    private Connection getNode(String id) {
         synchronized (nodesLock) {
             for (Connection node: nodes)
-                if (node.getId().equals(id)) {
-                    nodes.remove(node);
-                    logger.info("Node " + node.getId() + " removed from nodes table");
-                    return;
-                }
+                if (node.getId().equals(id))
+                    return node;
+            return null;
         }
     }
 

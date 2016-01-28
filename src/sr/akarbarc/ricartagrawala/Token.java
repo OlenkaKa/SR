@@ -14,6 +14,7 @@ public class Token {
     private static final Logger logger = Logger.getLogger(Token.class.getName());
     private boolean inUse = true;
     private Member owner;
+    private int ownerIdxBackup; // remember position when owner is removed
     private List<Member> members = new ArrayList<>();
 
     public static Token createToken(TokenMessage msg) {
@@ -48,6 +49,8 @@ public class Token {
     public synchronized void removeMember(String id) {
         for (Member member: members)
             if (member.id.equals(id)) {
+                if (member == owner)
+                    ownerIdxBackup = (members.indexOf(member) - 1) % members.size();
                 members.remove(member);
                 logger.info("Node " + member.id + " removed from token table.");
                 return;
@@ -72,8 +75,9 @@ public class Token {
 
     // return false when there is no waiting nodes
     public synchronized boolean setNextOwner() {
-        int endIdx = members.indexOf(owner);
         int size = members.size();
+        int endIdx = (owner == null) ? ownerIdxBackup : members.indexOf(owner);
+
         for (int i = (endIdx + 1) % size; i != endIdx; i = ++i % size) {
             Member member = members.get(i);
             if (member.r > member.g) {
