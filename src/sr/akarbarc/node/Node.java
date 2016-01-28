@@ -6,6 +6,7 @@ import sr.akarbarc.ricartagrawala.*;
 import java.io.IOException;
 import java.net.Socket;
 import java.util.*;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.logging.Logger;
 
 /**
@@ -23,7 +24,7 @@ public class Node implements Observer {
 
     // CONNECTIONS
     private Connection tracker;
-    private List<Connection> nodes = new ArrayList<>();
+    private List<Connection> nodes = new CopyOnWriteArrayList<>();
 
     // THREADS
     private Ping ping;
@@ -36,7 +37,6 @@ public class Node implements Observer {
 
     // SYNCHRONIZATION
     final Object trackerLock = new Object();
-    final Object nodesLock = new Object();
     final Object tokenLock = new Object();
 
     // PUBLIC METHODS
@@ -129,34 +129,31 @@ public class Node implements Observer {
 
         Connection conn = (Connection) o;
 
-        synchronized (trackerLock) {
-            if (conn == tracker) {
-                if (arg instanceof Boolean) {
-                    logger.info("Connection with tracker stopped.");
-                    ping.stop();
-                } else if (arg instanceof String)
-                    handleTrackerMessage((String) arg);
-                return;
-            }
+
+        if (conn == tracker) {
+            if (arg instanceof Boolean) {
+                logger.info("Connection with tracker stopped.");
+                ping.stop();
+            } else if (arg instanceof String)
+                handleTrackerMessage((String) arg);
+            return;
         }
 
-        synchronized (nodesLock) {
-            if (nodes.contains(conn)) {
-                if (arg instanceof Boolean) {
-                    logger.info("Connection with " + conn.getId() + " node stopped.");
+        if (nodes.contains(conn)) {
+            if (arg instanceof Boolean) {
+                logger.info("Connection with " + conn.getId() + " node stopped.");
 
-                    removeNode(conn);
-                    synchronized (tokenLock) {
-                        if (token != null)
-                            token.removeMember(conn.getId());
-                    }
+                removeNode(conn);
+                synchronized (tokenLock) {
+                    if (token != null)
+                        token.removeMember(conn.getId());
+                }
 
-                    IdMessage msg = new IdMessage(Type.DISCONNECT, conn.getId());
-                    sendAll(msg);
-                    send(msg, tracker);
-                } else if (arg instanceof String)
-                    handleNodeMessage((String) arg, conn);
-            }
+                IdMessage msg = new IdMessage(Type.DISCONNECT, conn.getId());
+                sendAll(msg);
+                send(msg, tracker);
+            } else if (arg instanceof String)
+                handleNodeMessage((String) arg, conn);
         }
     }
 
@@ -303,67 +300,52 @@ public class Node implements Observer {
     // OTHERS
 
     private void addNode(Connection newNode) {
-        synchronized (nodesLock) {
-            String newId = newNode.getId();
-            if (newId != null)
-                for (Connection node: nodes)
-                    if (node.getId().equals(newId)) {
-                        logger.warning("Node with " + newId + " already exists.");
-                        return;
-                    }
+        String newId = newNode.getId();
+        if (newId != null)
+            for (Connection node: nodes)
+                if (node.getId().equals(newId)) {
+                    logger.warning("Node with " + newId + " already exists.");
+                    return;
+                }
 
-            newNode.addObserver(this);
-            nodes.add(newNode);
-            logger.fine("Node " + newId + " added to nodes table");
-        }
+        newNode.addObserver(this);
+        nodes.add(newNode);
+        logger.fine("Node " + newId + " added to nodes table");
     }
 
     private void removeNode(Connection node) {
-        synchronized (nodesLock) {
-            nodes.remove(node);
-            logger.fine("Node " + node.getId() + " removed from nodes table");
-        }
+        nodes.remove(node);
+        logger.fine("Node " + node.getId() + " removed from nodes table");
     }
 
     private Connection getNode(String id) {
-        synchronized (nodesLock) {
-            for (Connection node: nodes)
-                if (node.getId().equals(id))
-                    return node;
-            return null;
-        }
+        for (Connection node: nodes)
+            if (node.getId().equals(id))
+                return node;
+        return null;
     }
 
     private void send(Message msg, Connection receiver) {
-        synchronized (receiver == tracker ? trackerLock : nodesLock) {
-            receiver.write(msg);
-        }
+        receiver.write(msg);
     }
 
     private void sendAll(Message msg) {
-        synchronized (nodesLock) {
-            for (Connection node: nodes)
-                node.write(msg);
-        }
+        for (Connection node: nodes)
+            node.write(msg);
     }
 
     private void sendForward(Message msg, Connection sender) {
-        synchronized (nodesLock) {
-            nodes.stream().filter(node -> node != sender).forEach(node -> node.write(msg));
-        }
+        nodes.stream().filter(node -> node != sender).forEach(node -> node.write(msg));
     }
 
     private void disconnect() {
         //IdMessage msg = new IdMessage(Type.DISCONNECT, id);
         //sendAll(msg);
-        synchronized (trackerLock) {
-            if (tracker != null) {
-                //send(msg, tracker);
-                tracker.close();
-            }
+        if (tracker != null) {
+            //send(msg, tracker);
+            tracker.close();
         }
-        synchronized (nodesLock) {
-            nodes.forEach(Connection::closeNoNotify);
-        }
+
+        nodes.forEach(Connection::closeNoNotify);
     }
 }
