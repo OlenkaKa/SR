@@ -5,7 +5,9 @@ import sr.akarbarc.msgs.Message;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.net.SocketAddress;
 import java.util.Observable;
 
 /**
@@ -15,10 +17,12 @@ public class Connection extends Observable {
     private String id;
     private Socket socket;
     private Thread receiver;
+    private boolean connectionType;
     private boolean running = true;
 
-    public Connection(Socket socket) {
+    public Connection(Socket socket, boolean connectionType) {
         this.socket = socket;
+        this.connectionType = connectionType;
         receiver = new Thread() {
             @Override
             public void run() {
@@ -33,7 +37,7 @@ public class Connection extends Observable {
                         notifyObservers(new String(input));
                     }
                     setState(false);
-                } catch (Exception e) {
+                } catch (IOException e) {
                     setState(false);
                 }
             }
@@ -41,8 +45,8 @@ public class Connection extends Observable {
         receiver.start();
     }
 
-    public Connection(String id, Socket socket) {
-        this(socket);
+    public Connection(String id, Socket socket, boolean connectionType) {
+        this(socket, connectionType);
         this.id = id;
     }
 
@@ -73,6 +77,18 @@ public class Connection extends Observable {
 
     public synchronized String getId() {
         return id;
+    }
+
+    public synchronized String getIp() {
+        return socket.getInetAddress().getHostAddress();
+    }
+
+    public synchronized int getPort() {
+        return connectionType ? socket.getPort() : socket.getLocalPort();
+    }
+
+    public synchronized boolean getConnectionType() {
+        return connectionType;
     }
 
     public synchronized void setId(String id) {

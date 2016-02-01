@@ -5,6 +5,8 @@ import sr.akarbarc.ricartagrawala.*;
 
 import java.io.IOException;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
+import java.net.UnknownHostException;
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.logging.Logger;
@@ -36,7 +38,6 @@ public class Node implements Observer {
     private Clock clock = new Clock();
 
     // SYNCHRONIZATION
-    final Object trackerLock = new Object();
     final Object tokenLock = new Object();
 
     // PUBLIC METHODS
@@ -53,7 +54,7 @@ public class Node implements Observer {
 
     public boolean start() {
         try {
-            tracker = new Connection("tracker", new Socket(trackerHost, trackerPort));
+            tracker = new Connection("tracker", new Socket(trackerHost, trackerPort), true);
             tracker.addObserver(this);
             logger.info("Connection with tracker started.");
 
@@ -134,6 +135,7 @@ public class Node implements Observer {
             if (arg instanceof Boolean) {
                 logger.info("Connection with tracker stopped.");
                 ping.stop();
+                handleTrackerDisconnected();
             } else if (arg instanceof String)
                 handleTrackerMessage((String) arg);
             return;
@@ -197,9 +199,31 @@ public class Node implements Observer {
     }
 
     void handleNewConnection(Socket socket) {
-        Connection node = new Connection(socket);
+        Connection node = new Connection(socket, false);
         addNode(node);
         logger.info("Connection with new node started.");
+    }
+
+    void handleTrackerDisconnected() {
+        while (true) {
+            try {
+                tracker = new Connection("tracker", new Socket(trackerHost, trackerPort), true);
+                tracker.addObserver(this);
+                logger.info("Connection with tracker started.");
+                break;
+            } catch (IOException e) {
+                try {
+                    logger.info("Trying to connect tracker...");
+                    Thread.sleep(3000);
+                } catch (InterruptedException e1) {
+                    stop();
+                }
+            }
+        }
+        ConnectionsMessage msg = new ConnectionsMessage(Type.CONNECTIONS_INFO, id, serverPort);
+        for(Connection node: nodes)
+            msg.addConnection(node.getId(), node.getConnectionType(), node.getIp(), node.getPort());
+        send(msg, tracker);
     }
 
     // MESSAGES HANDLERS
@@ -220,7 +244,7 @@ public class Node implements Observer {
             stop();
         } else {
             try {
-                Connection node = new Connection(msg.getId(), new Socket(msg.getIp(), msg.getPort()));
+                Connection node = new Connection(msg.getId(), new Socket(msg.getIp(), msg.getPort()), true);
                 addNode(node);
                 send(new IdMessage(Type.HELLO, id), node);
                 logger.info("Connection with " + node.getId() + " node started.");
@@ -240,7 +264,7 @@ public class Node implements Observer {
     }
 
     private void handleDisconnect(String data, Connection sender) {
-        IdMessage msg = new IdMessage(data);
+        final IdMessage msg = new IdMessage(data);
         String disconnectedId = msg.getId();
 
         sendForward(msg, sender);
@@ -264,7 +288,7 @@ public class Node implements Observer {
                 token.addMember(reqId);
                 token.setMemberR(reqId, msg.getR());
                 send(new IdMessage(Type.TOKEN_REQ_RECEIVED, reqId), sender);
-                logger.info("Send token request receive to " + reqId + " node.");
+                logger.info("Send token \"request received\" to " + reqId + " node.");
 
                 if (!token.isInUse() && token.setNextOwner()) {
                     TokenMessage tokenMsg = token.createMessage();
@@ -281,7 +305,7 @@ public class Node implements Observer {
 
     private void handleToken(String data, Connection sender) {
         TokenMessage msg = new TokenMessage(data);
-        if (msg.getDstId().equals(id)) {
+        if (msg.getId().equals(id)) {
             synchronized (tokenLock) {
                 token = Token.createToken(msg);
             }
@@ -314,8 +338,10 @@ public class Node implements Observer {
     }
 
     private void removeNode(Connection node) {
-        nodes.remove(node);
-        logger.fine("Node " + node.getId() + " removed from nodes table");
+        if (node != null) {
+            nodes.remove(node);
+            logger.fine("Node " + node.getId() + " removed from nodes table");
+        }
     }
 
     private Connection getNode(String id) {

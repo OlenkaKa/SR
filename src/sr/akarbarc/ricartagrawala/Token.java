@@ -22,7 +22,7 @@ public class Token {
         for (TokenMessage.TableElem elem: msg.getTable()) {
             Member member = new Member(elem.getId(), elem.getR(), elem.getG());
             token.members.add(member);
-            if (member.id.equals(msg.getDstId()))
+            if (member.id.equals(msg.getId()))
                 token.owner = member;
         }
         return token;
@@ -30,7 +30,7 @@ public class Token {
 
     public TokenMessage createMessage() {
         TokenMessage msg = new TokenMessage(Type.TOKEN);
-        msg.setDstId(owner.id);
+        msg.setId(owner.id);
         for (Member member: members)
             msg.addTableElem(member.id, member.r, member.g);
         return msg;
@@ -97,11 +97,11 @@ public class Token {
         }
     }
 
-    public void setInUse(boolean inUse) {
+    public synchronized void setInUse(boolean inUse) {
         this.inUse = inUse;
     }
 
-    public boolean isInUse() {
+    public synchronized boolean isInUse() {
         return inUse;
     }
 }

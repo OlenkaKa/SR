@@ -11,7 +11,7 @@ import java.util.List;
  * Created by ola on 25.01.16.
  */
 public class TokenMessage extends Message {
-    private String dst_id;
+    private String id;
     private List<TableElem> table = new ArrayList<>();
 
     public class TableElem {
@@ -34,7 +34,7 @@ public class TokenMessage extends Message {
 
     public static String getDestination(String data) {
         JSONObject json = new JSONObject(data);
-        return json.isNull("dst_id") ? null : json.getString("dst_id");
+        return json.isNull("id") ? null : json.getString("id");
     }
 
     public TokenMessage(Type type) {
@@ -45,7 +45,7 @@ public class TokenMessage extends Message {
         super(data);
         JSONObject json = new JSONObject(data);
         try {
-            dst_id = json.getString("dst_id");
+            id = json.getString("id");
             JSONArray jsonTable = json.getJSONArray("table");
             for (int i = 0; i < jsonTable.length(); ++i) {
                 JSONObject obj = jsonTable.getJSONObject(i);
@@ -60,16 +60,16 @@ public class TokenMessage extends Message {
         }
     }
 
-    public String getDstId() {
-        return dst_id;
+    public String getId() {
+        return id;
     }
 
     public List<TableElem> getTable() {
         return table;
     }
 
-    public void setDstId(String dstId) {
-        this.dst_id = dstId;
+    public void setId(String id) {
+        this.id = id;
     }
 
     public void addTableElem(String id, int r, int g) {
@@ -83,7 +83,7 @@ public class TokenMessage extends Message {
     @Override
     protected void setData(JSONObject obj) {
         super.setData(obj);
-        obj.put("dst_id", dst_id);
+        obj.put("id", id);
         JSONArray jTable = new JSONArray();
         for (TableElem elem: table) {
             JSONObject jElem = new JSONObject();
