@@ -207,6 +207,9 @@ public class Node implements Observer {
             case DISCONNECT:
                 handleDisconnect(data, tracker);
                 return;
+            case ELECTION_FINISHED:
+                handleElectionFinished(data);
+                return;
             case INVALID:
                 logger.warning("Invalid message received.");
         }
@@ -277,6 +280,13 @@ public class Node implements Observer {
             }
         }
         joinNetwork = true;
+    }
+
+    private void handleElectionFinished(String data) {
+        synchronized (tokenLock) {
+            token = new Token();
+            token.setInUse(false);
+        }
     }
 
     private void handleHello(String data, Connection sender) {
@@ -433,12 +443,28 @@ public class Node implements Observer {
                 } else {
                     reqReceived = false;
                     logger.info("Token request received timeout!");
-                    // TODO: find new token owner, remember do send request again
                     send(new Message(Type.ELECTION_REQ), tracker);
                     try {
                         Thread.sleep(5000);
-                        sendAll(new TokenReqMessage(Type.TOKEN_REQ, id, tokenClock.getTime()));
-                        logger.info("Token request send again.");
+                        if (token != null) {
+                            token.setInUse(true);
+                            token.addMember(id);
+                            token.setMemberR(id, tokenClock.getTime());
+                            token.setOwner(id);
+                            logger.info("Token received!");
+                            if (user != null) {
+                                synchronized (user) {
+                                    user.notify();
+                                    user = null;
+                                }
+                            }
+                            // TODO: is it allowed?
+                            this.cancel();
+                        }
+                        else {
+                            sendAll(new TokenReqMessage(Type.TOKEN_REQ, id, tokenClock.getTime()));
+                            logger.info("Token request send again.");
+                        }
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                     }
