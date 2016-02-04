@@ -14,12 +14,9 @@ public enum Type {
     HELLO(3),
     DISCONNECT(4),
     TOKEN_REQ(5),
-    TOKEN_REQ_RECEIVED(6),
+    TOKEN_BUSY(6),
     TOKEN(7),
-    CONNECTIONS_INFO(8),
-    ELECTION_LEADER(9),
     ELECTION_REQ(10),
-    ELECTION_ACCEPT_RESP(11),
     ELECTION_FINISHED(12);
 
     private int typeNum;

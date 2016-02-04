@@ -51,6 +51,6 @@ public class ConnectInfoMessage extends Message {
             jElem.put("port", elem.port);
             jTable.put(jElem);
         }
-        obj.put("connections", jTable);
+        //obj.put("connections", jTable);
     }
 }

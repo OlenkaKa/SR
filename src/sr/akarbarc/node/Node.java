@@ -16,6 +16,7 @@ public class Node implements Observer {
     private static final Logger logger = Logger.getLogger(Node.class.getName());
     private final String id = UUID.randomUUID().toString();
     private boolean joinNetwork = false;
+    private boolean reqReceived = false;
 
     // ADDRESSES
     private String trackerHost;
@@ -35,11 +36,11 @@ public class Node implements Observer {
     private Token token = null;
     private Clock tokenClock = new Clock();
     private Timer tokenReqTimeout;
-    private Timer tokenTimeout;
+    //private Timer tokenTimeout;
 
     // TIMEOUTS AND TIME INTERVALS IN SECONDS
-    private final int TOKEN_REQ_RECEIVED_TIME = 5;
-    private final int TOKEN_RECEIVED_TIME = 10;
+    private final int TOKEN_REQ_RECEIVED_TIME = 10;
+    //private final int TOKEN_RECEIVED_TIME = 10;
     private final int PING_TIME = 5;
 
     // SYNCHRONIZATION
@@ -186,7 +187,7 @@ public class Node implements Observer {
             case TOKEN_REQ:
                 handleTokenReq(data, node);
                 return;
-            case TOKEN_REQ_RECEIVED:
+            case TOKEN_BUSY:
                 handleTokenReqReceived(data, node);
                 return;
             case TOKEN:
@@ -218,6 +219,9 @@ public class Node implements Observer {
     }
 
     void handleTrackerDisconnected() {
+        logger.info("Tracker disconnected, node stopped.");
+        stop();
+        /*
         while (true) {
             try {
                 tracker = new Connection("tracker", new Socket(trackerHost, trackerPort), false);
@@ -242,6 +246,7 @@ public class Node implements Observer {
         ping = new Ping(tracker, PING_TIME);
         ping.addObserver(this);
         ping.start();
+        */
     }
 
     // MESSAGES HANDLERS
@@ -285,7 +290,7 @@ public class Node implements Observer {
         final IdMessage msg = new IdMessage(data);
         String disconnectedId = msg.getId();
 
-        sendForward(msg, sender);
+        //sendForward(msg, sender);
         logger.info("Disconnect message received - node " + disconnectedId);
 
         removeNode(getNode(disconnectedId));
@@ -305,26 +310,38 @@ public class Node implements Observer {
                 String reqId = msg.getId();
                 token.addMember(reqId);
                 token.setMemberR(reqId, msg.getR());
-                send(new IdMessage(Type.TOKEN_REQ_RECEIVED, reqId), sender);
-                logger.info("Send \"token request received\" to " + reqId + " node.");
 
                 if (!token.isInUse() && token.setNextOwner()) {
                     TokenMessage tokenMsg = token.createMessage();
                     token = null;
                     send(tokenMsg, sender);
                     logger.info("Send token to " + tokenMsg.getId() + " node.");
+                } else {
+                    send(new IdMessage(Type.TOKEN_BUSY, reqId), sender);
+                    logger.info("Send \"token request received\" to " + reqId + " node.");
                 }
             }
         }
     }
 
     private void handleTokenReqReceived(String data, Connection sender) {
+        // TODO!!!
         IdMessage msg = new IdMessage(data);
         if (!msg.getId().equals(id))
             sendForward(msg, sender);
         else {
-            stopWaitingForTokenResp();
-            waitForToken();
+            reqReceived = true;
+            /*
+            try {
+                stopWaitingForTokenResp();
+                Thread.sleep(TOKEN_REQ_RECEIVED_TIME * 1000);
+                sendAll(new TokenReqMessage(Type.TOKEN_REQ, id, tokenClock.getTime()));
+                waitForTokenResp();
+            } catch (InterruptedException e) {
+                //e.printStackTrace();
+                Thread.currentThread().interrupt();
+            }
+            */
         }
     }
 
@@ -332,7 +349,8 @@ public class Node implements Observer {
         TokenMessage msg = new TokenMessage(data);
         if (msg.getId().equals(id)) {
             logger.info("Token received!");
-            stopWaitingForToken();
+            stopWaitingForTokenResp();
+            reqReceived = false;
 
             synchronized (tokenLock) {
                 token = Token.createToken(msg);
@@ -408,12 +426,28 @@ public class Node implements Observer {
         tokenReqTimeout.schedule(new TimerTask() {
             @Override
             public void run() {
-                logger.info("Token request received timeout!");
-                // TODO: find new token owner, remember do send request again
+                if (reqReceived) {
+                    reqReceived = false;
+                    sendAll(new TokenReqMessage(Type.TOKEN_REQ, id, tokenClock.getTime()));
+                    logger.info("Token request send again.");
+                } else {
+                    reqReceived = false;
+                    logger.info("Token request received timeout!");
+                    // TODO: find new token owner, remember do send request again
+                    send(new Message(Type.ELECTION_REQ), tracker);
+                    try {
+                        Thread.sleep(5000);
+                        sendAll(new TokenReqMessage(Type.TOKEN_REQ, id, tokenClock.getTime()));
+                        logger.info("Token request send again.");
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
             }
-        }, TOKEN_REQ_RECEIVED_TIME * 1000);
+        }, TOKEN_REQ_RECEIVED_TIME * 1000, TOKEN_REQ_RECEIVED_TIME * 1000);
     }
 
+    /*
     private void waitForToken() {
         tokenTimeout = new Timer();
         tokenTimeout.schedule(new TimerTask() {
@@ -425,6 +459,7 @@ public class Node implements Observer {
             }
         }, TOKEN_RECEIVED_TIME * 1000);
     }
+    */
 
     private void stopWaitingForTokenResp() {
         if (tokenReqTimeout != null) {
@@ -433,10 +468,12 @@ public class Node implements Observer {
         }
     }
 
+    /*
     private void stopWaitingForToken() {
         if (tokenTimeout != null) {
             tokenTimeout.cancel();
             tokenTimeout = null;
         }
     }
+    */
 }
