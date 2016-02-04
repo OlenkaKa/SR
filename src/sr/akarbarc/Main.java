@@ -39,6 +39,7 @@ public class Main {
                     System.out.println("Token released.");
                 } catch (Exception e) {
                     System.err.println("Unable to get token.");
+                    e.printStackTrace();
                 }
             }
             node.stop();

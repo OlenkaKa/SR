@@ -34,12 +34,12 @@ public class Node implements Observer {
     // RICHART-AGRAWALA
     private Token token = null;
     private Clock tokenClock = new Clock();
-    private Timer tokenReqReceivedTimer;
-    private Timer tokenReceivedTimer;
+    private Timer tokenReqTimeout;
+    private Timer tokenTimeout;
 
     // TIMEOUTS AND TIME INTERVALS IN SECONDS
-    private final int TOKEN_REQ_RECEIVED_TIME = 10;
-    private final int TOKEN_RECEIVED_TIME = 30;
+    private final int TOKEN_REQ_RECEIVED_TIME = 5;
+    private final int TOKEN_RECEIVED_TIME = 10;
     private final int PING_TIME = 5;
 
     // SYNCHRONIZATION
@@ -99,7 +99,8 @@ public class Node implements Observer {
         }
 
         // send token request
-        sendTokenReq(tokenClock.increaseTime());
+        sendAll(new TokenReqMessage(Type.TOKEN_REQ, id, tokenClock.increaseTime()));
+        waitForTokenResp();
         if (user == null) {
             user = Thread.currentThread();
             synchronized (user) {
@@ -322,15 +323,8 @@ public class Node implements Observer {
         if (!msg.getId().equals(id))
             sendForward(msg, sender);
         else {
-            tokenReqReceivedTimer.cancel();
-            tokenReceivedTimer = new Timer();
-            tokenReceivedTimer.schedule(new TimerTask() {
-                @Override
-                public void run() {
-                    logger.info("Token received timeout - send request again.");
-                    sendTokenReq(tokenClock.getTime());
-                }
-            }, TOKEN_RECEIVED_TIME * 1000);
+            stopWaitingForTokenResp();
+            waitForToken();
         }
     }
 
@@ -338,13 +332,13 @@ public class Node implements Observer {
         TokenMessage msg = new TokenMessage(data);
         if (msg.getId().equals(id)) {
             logger.info("Token received!");
-            tokenReceivedTimer.cancel();
+            stopWaitingForToken();
 
             synchronized (tokenLock) {
                 token = Token.createToken(msg);
             }
-            synchronized (user) {
-                if (user != null) {
+            if (user != null) {
+                synchronized (user) {
                     user.notify();
                     user = null;
                 }
@@ -409,15 +403,40 @@ public class Node implements Observer {
         nodes.forEach(Connection::closeNoNotify);
     }
 
-    private void sendTokenReq(int time) {
-        sendAll(new TokenReqMessage(Type.TOKEN_REQ, id, time));
-        tokenReqReceivedTimer = new Timer();
-        tokenReqReceivedTimer.schedule(new TimerTask() {
+    private void waitForTokenResp() {
+        tokenReqTimeout = new Timer();
+        tokenReqTimeout.schedule(new TimerTask() {
             @Override
             public void run() {
                 logger.info("Token request received timeout!");
                 // TODO: find new token owner, remember do send request again
             }
         }, TOKEN_REQ_RECEIVED_TIME * 1000);
+    }
+
+    private void waitForToken() {
+        tokenTimeout = new Timer();
+        tokenTimeout.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                logger.info("Token received timeout - send request again.");
+                sendAll(new TokenReqMessage(Type.TOKEN_REQ, id, tokenClock.getTime()));
+                waitForTokenResp();
+            }
+        }, TOKEN_RECEIVED_TIME * 1000);
+    }
+
+    private void stopWaitingForTokenResp() {
+        if (tokenReqTimeout != null) {
+            tokenReqTimeout.cancel();
+            tokenReqTimeout = null;
+        }
+    }
+
+    private void stopWaitingForToken() {
+        if (tokenTimeout != null) {
+            tokenTimeout.cancel();
+            tokenTimeout = null;
+        }
     }
 }
