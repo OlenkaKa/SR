@@ -5,8 +5,6 @@ import sr.akarbarc.ricartagrawala.*;
 
 import java.io.IOException;
 import java.net.Socket;
-import java.net.SocketTimeoutException;
-import java.net.UnknownHostException;
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.logging.Logger;
@@ -54,7 +52,7 @@ public class Node implements Observer {
 
     public boolean start() {
         try {
-            tracker = new Connection("tracker", new Socket(trackerHost, trackerPort), true);
+            tracker = new Connection("tracker", new Socket(trackerHost, trackerPort), false);
             tracker.addObserver(this);
             logger.info("Connection with tracker started.");
 
@@ -154,6 +152,10 @@ public class Node implements Observer {
                 IdMessage msg = new IdMessage(Type.DISCONNECT, conn.getId());
                 sendAll(msg);
                 send(msg, tracker);
+                ConnectInfoMessage req = new ConnectInfoMessage(Type.JOIN_NETWORK_REQ, id, serverPort);
+                for(Connection node: nodes)
+                    req.addConnection(node.getId(), node.isIncomming(), node.getIp(), node.getPort());
+                send(req, tracker);
             } else if (arg instanceof String)
                 handleNodeMessage((String) arg, conn);
         }
@@ -199,7 +201,7 @@ public class Node implements Observer {
     }
 
     void handleNewConnection(Socket socket) {
-        Connection node = new Connection(socket, false);
+        Connection node = new Connection(socket, true);
         addNode(node);
         logger.info("Connection with new node started.");
     }
@@ -207,7 +209,7 @@ public class Node implements Observer {
     void handleTrackerDisconnected() {
         while (true) {
             try {
-                tracker = new Connection("tracker", new Socket(trackerHost, trackerPort), true);
+                tracker = new Connection("tracker", new Socket(trackerHost, trackerPort), false);
                 tracker.addObserver(this);
                 logger.info("Connection with tracker started.");
                 break;
@@ -217,13 +219,18 @@ public class Node implements Observer {
                     Thread.sleep(3000);
                 } catch (InterruptedException e1) {
                     stop();
+                    return;
                 }
             }
         }
-        ConnectionsMessage msg = new ConnectionsMessage(Type.CONNECTIONS_INFO, id, serverPort);
+        ConnectInfoMessage msg = new ConnectInfoMessage(Type.CONNECTIONS_INFO, id, serverPort);
         for(Connection node: nodes)
-            msg.addConnection(node.getId(), node.getConnectionType(), node.getIp(), node.getPort());
+            msg.addConnection(node.getId(), node.isIncomming(), node.getIp(), node.getPort());
         send(msg, tracker);
+
+        ping = new Ping(tracker);
+        ping.addObserver(this);
+        ping.start();
     }
 
     // MESSAGES HANDLERS
@@ -244,13 +251,13 @@ public class Node implements Observer {
             stop();
         } else {
             try {
-                Connection node = new Connection(msg.getId(), new Socket(msg.getIp(), msg.getPort()), true);
+                Connection node = new Connection(msg.getId(), new Socket(msg.getIp(), msg.getPort()), false);
                 addNode(node);
                 send(new IdMessage(Type.HELLO, id), node);
                 logger.info("Connection with " + node.getId() + " node started.");
             } catch (IOException e) {
                 logger.warning("Cannot connect " + msg.getId() + " node.");
-                // TODO
+                send(new IdMessage(Type.DISCONNECT, msg.getId()), tracker);
             }
         }
         joinNetwork = true;
