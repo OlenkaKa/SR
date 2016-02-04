@@ -33,10 +33,17 @@ public class Node implements Observer {
 
     // RICHART-AGRAWALA
     private Token token = null;
-    private Clock clock = new Clock();
+    private Clock tokenClock = new Clock();
+    private Timer tokenReqReceivedTimer;
+    private Timer tokenReceivedTimer;
+
+    // TIMEOUTS AND TIME INTERVALS IN SECONDS
+    private final int TOKEN_REQ_RECEIVED_TIME = 10;
+    private final int TOKEN_RECEIVED_TIME = 30;
+    private final int PING_TIME = 5;
 
     // SYNCHRONIZATION
-    final Object tokenLock = new Object();
+    private final Object tokenLock = new Object();
 
     // PUBLIC METHODS
 
@@ -56,7 +63,7 @@ public class Node implements Observer {
             tracker.addObserver(this);
             logger.info("Connection with tracker started.");
 
-            ping = new Ping(tracker);
+            ping = new Ping(tracker, PING_TIME);
             ping.addObserver(this);
             ping.start();
 
@@ -79,17 +86,20 @@ public class Node implements Observer {
         disconnect();
     }
 
-    public void getResource() throws InterruptedException {
+    public void getToken() throws InterruptedException {
+        // current node has a token
         synchronized (tokenLock) {
             if (token != null) {
                 token.setInUse(true);
                 token.addMember(id);
-                token.setMemberR(id, clock.increaseTime());
+                token.setMemberR(id, tokenClock.increaseTime());
                 token.setOwner(id);
                 return;
             }
         }
-        sendAll(new TokenReqMessage(Type.TOKEN_REQ, id, clock.increaseTime()));
+
+        // send token request
+        sendTokenReq(tokenClock.increaseTime());
         if (user == null) {
             user = Thread.currentThread();
             synchronized (user) {
@@ -98,9 +108,9 @@ public class Node implements Observer {
         }
     }
 
-    public void releaseResource() {
+    public void releaseToken() {
         synchronized (tokenLock) {
-            token.setMemberG(id, clock.increaseTime());
+            token.setMemberG(id, tokenClock.increaseTime());
             token.setInUse(false);
             if (token.setNextOwner()) {
                 TokenMessage msg = token.createMessage();
@@ -228,7 +238,7 @@ public class Node implements Observer {
             msg.addConnection(node.getId(), node.isIncomming(), node.getIp(), node.getPort());
         send(msg, tracker);
 
-        ping = new Ping(tracker);
+        ping = new Ping(tracker, PING_TIME);
         ping.addObserver(this);
         ping.start();
     }
@@ -295,24 +305,41 @@ public class Node implements Observer {
                 token.addMember(reqId);
                 token.setMemberR(reqId, msg.getR());
                 send(new IdMessage(Type.TOKEN_REQ_RECEIVED, reqId), sender);
-                logger.info("Send token \"request received\" to " + reqId + " node.");
+                logger.info("Send \"token request received\" to " + reqId + " node.");
 
                 if (!token.isInUse() && token.setNextOwner()) {
                     TokenMessage tokenMsg = token.createMessage();
                     token = null;
                     send(tokenMsg, sender);
+                    logger.info("Send token to " + tokenMsg.getId() + " node.");
                 }
             }
         }
     }
 
     private void handleTokenReqReceived(String data, Connection sender) {
-        // TODO
+        IdMessage msg = new IdMessage(data);
+        if (!msg.getId().equals(id))
+            sendForward(msg, sender);
+        else {
+            tokenReqReceivedTimer.cancel();
+            tokenReceivedTimer = new Timer();
+            tokenReceivedTimer.schedule(new TimerTask() {
+                @Override
+                public void run() {
+                    logger.info("Token received timeout - send request again.");
+                    sendTokenReq(tokenClock.getTime());
+                }
+            }, TOKEN_RECEIVED_TIME * 1000);
+        }
     }
 
     private void handleToken(String data, Connection sender) {
         TokenMessage msg = new TokenMessage(data);
         if (msg.getId().equals(id)) {
+            logger.info("Token received!");
+            tokenReceivedTimer.cancel();
+
             synchronized (tokenLock) {
                 token = Token.createToken(msg);
             }
@@ -334,7 +361,7 @@ public class Node implements Observer {
         String newId = newNode.getId();
         if (newId != null)
             for (Connection node: nodes)
-                if (node.getId().equals(newId)) {
+                if (newId.equals(node.getId())) {
                     logger.warning("Node with " + newId + " already exists.");
                     return;
                 }
@@ -380,5 +407,17 @@ public class Node implements Observer {
         }
 
         nodes.forEach(Connection::closeNoNotify);
+    }
+
+    private void sendTokenReq(int time) {
+        sendAll(new TokenReqMessage(Type.TOKEN_REQ, id, time));
+        tokenReqReceivedTimer = new Timer();
+        tokenReqReceivedTimer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                logger.info("Token request received timeout!");
+                // TODO: find new token owner, remember do send request again
+            }
+        }, TOKEN_REQ_RECEIVED_TIME * 1000);
     }
 }

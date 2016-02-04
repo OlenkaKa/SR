@@ -26,19 +26,19 @@ public class Main {
 
             Scanner reader = new Scanner(System.in);
             while (true) {
-                System.out.println("Press ENTER to get resource or type \"exit\" to exit.");
+                System.out.println("Press ENTER to get token or type \"exit\" to exit.");
                 if (reader.nextLine().equalsIgnoreCase("exit"))
                     break;
 
-                System.out.println("Trying to get resource...");
+                System.out.println("Trying to get token...");
                 try {
-                    node.getResource();
-                    System.out.println("Success to get resource, press ENTER to release it.");
+                    node.getToken();
+                    System.out.println("Success to get token, press ENTER to release it.");
                     reader.nextLine();
-                    node.releaseResource();
-                    System.out.println("Resource released.");
+                    node.releaseToken();
+                    System.out.println("Token released.");
                 } catch (Exception e) {
-                    System.err.println("Unable to get resource.");
+                    System.err.println("Unable to get token.");
                 }
             }
             node.stop();

@@ -9,13 +9,14 @@ import java.util.Observable;
  * Created by ola on 06.01.16.
  */
 public class Ping extends Observable {
-    private final int INTERVAL = 5000;
+    private int interval = 5000;
     private Connection tracker;
     private Thread sender;
     private boolean running = false;
 
-    public Ping(Connection tracker) {
+    public Ping(Connection tracker, int interval) {
         this.tracker = tracker;
+        this.interval = interval * 1000;
     }
 
     public void start() {
@@ -26,7 +27,7 @@ public class Ping extends Observable {
                 try {
                     while(!isInterrupted()) {
                         tracker.write(msg);
-                        Thread.sleep(INTERVAL);
+                        Thread.sleep(interval);
                     }
                 } catch (Exception e) {
                     Ping.this.stop();

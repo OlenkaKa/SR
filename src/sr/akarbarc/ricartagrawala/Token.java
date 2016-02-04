@@ -14,7 +14,7 @@ public class Token {
     private static final Logger logger = Logger.getLogger(Token.class.getName());
     private boolean inUse = true;
     private Member owner;
-    private int ownerIdxBackup; // remember position when owner is removed
+    private int ownerIdxBackup = 0; // remember position when owner is removed
     private List<Member> members = new ArrayList<>();
 
     public static Token createToken(TokenMessage msg) {
@@ -76,10 +76,21 @@ public class Token {
     // return false when there is no waiting nodes
     public synchronized boolean setNextOwner() {
         int size = members.size();
+        Member member;
+
+        if (size == 1) {
+            // this case in a separate statement because of problems with iterating
+            member = members.get(0);
+            if (member.r > member.g) {
+                owner = member;
+                return true;
+            }
+        }
+
         int endIdx = (owner == null) ? ownerIdxBackup : members.indexOf(owner);
 
         for (int i = (endIdx + 1) % size; i != endIdx; i = ++i % size) {
-            Member member = members.get(i);
+            member = members.get(i);
             if (member.r > member.g) {
                 owner = member;
                 return true;

@@ -9,4 +9,8 @@ public class Clock {
     public synchronized int increaseTime() {
         return ++time;
     }
+
+    public synchronized int getTime() {
+        return time;
+    }
 }
