@@ -37,11 +37,9 @@ public class Node implements Observer {
     private Token token = null;
     private Clock tokenClock;
     private Timer tokenReqTimeout;
-    //private Timer tokenTimeout;
 
     // TIMEOUTS AND TIME INTERVALS IN SECONDS
     private final int TOKEN_REQ_RECEIVED_TIME = 10;
-    //private final int TOKEN_RECEIVED_TIME = 10;
     private final int PING_TIME = 5;
 
     // SYNCHRONIZATION
@@ -172,13 +170,15 @@ public class Node implements Observer {
                         token.removeMember(conn.getId());
                 }
 
-                IdMessage msg = new IdMessage(Type.DISCONNECT, conn.getId());
-                sendAll(msg);
-                send(msg, tracker);
-                ConnectInfoMessage req = new ConnectInfoMessage(Type.JOIN_NETWORK_REQ, id, serverPort);
-                for(Connection node: nodes)
-                    req.addConnection(node.getId(), node.isIncomming(), node.getIp(), node.getPort());
-                send(req, tracker);
+                //IdMessage msg = new IdMessage(Type.DISCONNECT, conn.getId());
+                //sendAll(msg);
+                //send(msg, tracker);
+                if (!conn.isIncomming()) {
+                    ConnectInfoMessage req = new ConnectInfoMessage(Type.JOIN_NETWORK_REQ, id, serverPort);
+                    for (Connection node : nodes)
+                        req.addConnection(node.getId(), node.isIncomming(), node.getIp(), node.getPort());
+                    send(req, tracker);
+                }
             } else if (arg instanceof String)
                 handleNodeMessage((String) arg, conn);
         }
@@ -187,7 +187,7 @@ public class Node implements Observer {
     // MAIN HANDLERS
 
     void handleNodeMessage(String data, Connection node) {
-        logger.fine("Message from node: " + data);
+        logger.info("Message from node: " + data);
         switch (Type.getType(data)) {
             case HELLO:
                 handleHello(data, node);
@@ -210,7 +210,7 @@ public class Node implements Observer {
     }
 
     void handleTrackerMessage(String data) {
-        logger.fine("Message from tracker: " + data);
+        logger.info("Message from tracker: " + data);
         switch (Type.getType(data)) {
             case JOIN_NETWORK_RESP:
                 handleJoinNetworkResp(data);
@@ -268,8 +268,9 @@ public class Node implements Observer {
 
     private void handleJoinNetworkResp(String data) {
         AddressMessage msg = new AddressMessage(data);
+        String respId = msg.getId();
 
-        if (msg.getId().equals(id)) {
+        if (respId == null || respId.equals(id)) {
             // node is a root
             if (!joinNetwork) {
                 synchronized (tokenLock) {
@@ -282,10 +283,10 @@ public class Node implements Observer {
             stop();
         } else {
             try {
-                if (getNode(msg.getId()) != null)
+                if (getNode(respId) != null)
                     send(new ConnectInfoMessage(Type.JOIN_NETWORK_REQ, id, serverPort), tracker);
                 else {
-                    Connection node = new Connection(msg.getId(), new Socket(msg.getIp(), msg.getPort()), false);
+                    Connection node = new Connection(respId, new Socket(msg.getIp(), msg.getPort()), false);
                     addNode(node);
                     send(new IdMessage(Type.HELLO, id), node);
                     logger.info("Connection with " + node.getId() + " node started.");
@@ -418,22 +419,28 @@ public class Node implements Observer {
     }
 
     private Connection getNode(String id) {
+        if (id == null)
+            return null;
+
         for (Connection node: nodes)
-            if (node.getId().equals(id))
+            if (id.equals(node.getId()))
                 return node;
         return null;
     }
 
     private void send(Message msg, Connection receiver) {
+        logger.info("Send to " + receiver.getId() + ": " + msg);
         receiver.write(msg);
     }
 
     private void sendAll(Message msg) {
+        logger.info("Send to all nodes: " + msg);
         for (Connection node: nodes)
             node.write(msg);
     }
 
     private void sendForward(Message msg, Connection sender) {
+        logger.info("Send forward beside node " + sender.getId() + ": " + msg);
         nodes.stream().filter(node -> node != sender).forEach(node -> node.write(msg));
     }
 
@@ -490,33 +497,10 @@ public class Node implements Observer {
         }, TOKEN_REQ_RECEIVED_TIME * 1000, TOKEN_REQ_RECEIVED_TIME * 1000);
     }
 
-    /*
-    private void waitForToken() {
-        tokenTimeout = new Timer();
-        tokenTimeout.schedule(new TimerTask() {
-            @Override
-            public void run() {
-                logger.info("Token received timeout - send request again.");
-                sendAll(new TokenReqMessage(Type.TOKEN_REQ, id, tokenClock.getTime()));
-                waitForTokenResp();
-            }
-        }, TOKEN_RECEIVED_TIME * 1000);
-    }
-    */
-
     private void stopWaitingForTokenResp() {
         if (tokenReqTimeout != null) {
             tokenReqTimeout.cancel();
             tokenReqTimeout = null;
         }
     }
-
-    /*
-    private void stopWaitingForToken() {
-        if (tokenTimeout != null) {
-            tokenTimeout.cancel();
-            tokenTimeout = null;
-        }
-    }
-    */
 }
