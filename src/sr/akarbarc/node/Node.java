@@ -17,6 +17,7 @@ public class Node implements Observer {
     private final String id = UUID.randomUUID().toString();
     private boolean joinNetwork = false;
     private boolean reqReceived = false;
+    private boolean isRunning;
 
     // ADDRESSES
     private String trackerHost;
@@ -25,7 +26,7 @@ public class Node implements Observer {
 
     // CONNECTIONS
     private Connection tracker;
-    private List<Connection> nodes = new CopyOnWriteArrayList<>();
+    private List<Connection> nodes;
 
     // THREADS
     private Ping ping;
@@ -34,7 +35,7 @@ public class Node implements Observer {
 
     // RICHART-AGRAWALA
     private Token token = null;
-    private Clock tokenClock = new Clock();
+    private Clock tokenClock;
     private Timer tokenReqTimeout;
     //private Timer tokenTimeout;
 
@@ -52,14 +53,23 @@ public class Node implements Observer {
         this.trackerHost = trackerHost;
         this.trackerPort = trackerPort;
         this.serverPort = serverPort;
+        nodes = new CopyOnWriteArrayList<>();
+        tokenClock = new Clock();
+        token = null;
     }
 
     public String getId() {
         return id;
     }
 
+    public boolean isRunning() {
+        return isRunning;
+    }
+
     public boolean start() {
         try {
+            isRunning = true;
+
             tracker = new Connection("tracker", new Socket(trackerHost, trackerPort), false);
             tracker.addObserver(this);
             logger.info("Connection with tracker started.");
@@ -80,6 +90,7 @@ public class Node implements Observer {
     }
 
     public void stop() {
+        isRunning = false;
         if (server != null)
             server.stop();
         if (ping != null)
@@ -224,6 +235,7 @@ public class Node implements Observer {
     void handleTrackerDisconnected() {
         logger.info("Tracker disconnected, node stopped.");
         stop();
+        isRunning = false;
         /*
         while (true) {
             try {
@@ -270,13 +282,18 @@ public class Node implements Observer {
             stop();
         } else {
             try {
-                Connection node = new Connection(msg.getId(), new Socket(msg.getIp(), msg.getPort()), false);
-                addNode(node);
-                send(new IdMessage(Type.HELLO, id), node);
-                logger.info("Connection with " + node.getId() + " node started.");
+                if (getNode(msg.getId()) != null)
+                    send(new ConnectInfoMessage(Type.JOIN_NETWORK_REQ, id, serverPort), tracker);
+                else {
+                    Connection node = new Connection(msg.getId(), new Socket(msg.getIp(), msg.getPort()), false);
+                    addNode(node);
+                    send(new IdMessage(Type.HELLO, id), node);
+                    logger.info("Connection with " + node.getId() + " node started.");
+                }
             } catch (IOException e) {
                 logger.warning("Cannot connect " + msg.getId() + " node.");
-                send(new IdMessage(Type.DISCONNECT, msg.getId()), tracker);
+                //send(new IdMessage(Type.DISCONNECT, msg.getId()), tracker);
+                send(new ConnectInfoMessage(Type.JOIN_NETWORK_REQ, id, serverPort), tracker);
             }
         }
         joinNetwork = true;

@@ -25,7 +25,7 @@ public class Main {
             }
 
             Scanner reader = new Scanner(System.in);
-            while (true) {
+            while (node.isRunning()) {
                 System.out.println("Press ENTER to get token or type \"exit\" to exit.");
                 if (reader.nextLine().equalsIgnoreCase("exit"))
                     break;
